@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>校园互助 · 学生端</title>
+<style>
+/* ============================================================
+   校园互助平台学生端 · 单文件 SPA
+   纯原生 HTML/CSS/JS，零依赖；Hash 路由；fetch 统一带 Bearer
+   风格与管理端深色主题统一：深蓝底 + 圆角卡片 + 彩色徽标
+   ============================================================ */
+:root{
+  /* 「青砚」学生端暗色版：墨青底 + 青松主色 + 暖沙点缀（去默认蓝紫的 AI 味） */
+  --bg:#0f1a1c;           /* 页面底色（墨青黑） */
+  --panel:#16262a;        /* 卡片底色 */
+  --panel-2:#1c3237;      /* 次级底色（输入框/悬停） */
+  --line:#28454b;         /* 边框 */
+  --text:#e9f2ef;         /* 主文字 */
+  --muted:#8fadaa;        /* 次级文字 */
+  --accent:#2fa39a;       /* 主青松（按钮/链接） */
+  --accent-2:#177f78;
+  --sand:#d4aa5e;         /* 暖沙点缀（官方/高亮） */
+  --ok:#4cd996;           /* L1 绿 */
+  --warn:#f0b341;         /* L2 黄 */
+  --danger:#ff6363;       /* L3 红 */
+  --official:#63b3a4;     /* 官方青玉 */
+  --radius:10px;
+  --shadow:0 2px 10px rgba(4,14,16,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--text);
+  font:14px/1.65 "HarmonyOS Sans SC","MiSans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  display:flex;justify-content:center;
+}
+#app{width:100%;max-width:480px;min-height:100vh;position:relative;
+  padding-bottom:76px; /* 底部 TabBar 占位 */}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{
+  font:inherit;color:var(--text);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:10px 12px;width:100%;outline:none;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:88px}
+
+/* ---------- 通用组件 ---------- */
+.card{background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:14px;margin:12px;
+  box-shadow:var(--shadow)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--accent);color:#fff;border-radius:var(--radius);
+  padding:10px 16px;font-weight:600;transition:.15s;}
+.btn:active{transform:scale(.97)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.block{width:100%}
+.btn.danger{background:var(--danger)}
+.btn.primary{background:var(--accent)}
+.row{display:flex;align-items:center;gap:8px}
+.grow{flex:1}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+
+/* 徽标：L1绿/L2黄/L3红、官方青玉、状态灰 */
+.badge{display:inline-block;padding:1px 8px;border-radius:4px;
+  font-size:11px;font-weight:600;line-height:1.7}
+.b-L1{background:rgba(76,217,150,.14);color:var(--ok)}
+.b-L2{background:rgba(240,179,65,.14);color:var(--warn)}
+.b-L3{background:rgba(255,99,99,.14);color:var(--danger)}
+.b-official{background:rgba(212,170,94,.16);color:var(--sand)}  /* 官方用暖沙金，醒目不撞色 */
+.b-status{background:var(--panel-2);color:var(--muted)}
+/* 紧急程度：高红/中橙/低灰 */
+.u-high{color:var(--danger);font-weight:600}
+.u-mid{color:var(--warn)}
+.u-low{color:var(--muted)}
+
+/* Toast 轻提示 */
+#toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);
+  background:rgba(22,38,42,.96);border:1px solid var(--line);color:var(--text);
+  padding:9px 18px;border-radius:20px;font-size:13px;z-index:99;
+  opacity:0;pointer-events:none;transition:.25s;max-width:86%;
+  box-shadow:var(--shadow)}
+#toast.show{opacity:1}
+#toast.err{color:var(--danger);border-color:rgba(255,93,93,.4)}
+
+/* 模态弹窗 */
+#modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;
+  display:none;align-items:center;justify-content:center;padding:24px}
+#modal-mask.show{display:flex}
+#modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  width:100%;max-width:400px;padding:20px;max-height:80vh;overflow:auto;box-shadow:var(--shadow)}
+#modal h3{margin-bottom:12px;font-size:16px}
+
+/* 页面头部 */
+.page-head{padding:16px 14px 4px;font-size:18px;font-weight:700}
+
+/* 底部 TabBar */
+#tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;background:var(--panel);
+  border-top:1px solid var(--line);display:flex;z-index:50}
+#tabbar a{flex:1;text-align:center;padding:9px 0 10px;font-size:12px;color:var(--muted)}
+#tabbar a .ico{display:block;font-size:20px;line-height:1.2}
+#tabbar a.on{color:var(--accent)}
+
+/* ---------- 登录页 ---------- */
+#pg-login{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:32px 0;
+  background:
+    radial-gradient(circle at 80% 12%, rgba(212,170,94,.08) 0%, transparent 40%),
+    radial-gradient(circle at 15% 85%, rgba(47,163,154,.10) 0%, transparent 45%)} /* 角部氛围光 */
+.logo{text-align:center;margin-bottom:26px}
+.logo .em{font-size:44px}
+.logo h1{font-size:20px;margin-top:8px}
+.logo p{color:var(--muted);font-size:12px;margin-top:2px}
+
+/* ---------- 广场 ---------- */
+.tabs{display:flex;gap:6px;padding:10px 12px 2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{padding:5px 13px;border-radius:16px;background:var(--panel);
+  border:1px solid var(--line);color:var(--muted);white-space:nowrap;font-size:13px}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.fab{position:fixed;right:calc(50% - 240px + 16px);bottom:88px;z-index:60;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border-radius:24px;padding:11px 20px;
+  font-weight:700;box-shadow:0 6px 18px rgba(23,127,120,.45);}
+@media (max-width:480px){.fab{right:16px}}
+.o-card{position:relative}
+.o-card .title{font-weight:600;margin:6px 0 4px}
+.o-meta{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--muted);font-size:12px;margin-top:4px}
+
+/* ---------- 发布页 ---------- */
+.seg{display:flex;margin:12px;gap:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.seg button{flex:1;padding:9px;color:var(--muted);background:var(--panel)}
+.seg button.on{background:var(--accent);color:#fff}
+.rec-btn{width:110px;height:110px;border-radius:50%;margin:20px auto;display:block;
+  background:var(--panel-2);border:2px solid var(--accent);color:var(--text);
+  font-size:13px;user-select:none;-webkit-user-select:none}
+.rec-btn.rec{background:var(--danger);border-color:var(--danger);animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 12px rgba(255,93,93,.15)}}
+.fld{margin:0 12px 12px}
+.fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.parsed-tip{margin:0 12px 10px;padding:8px 12px;border-radius:var(--radius);
+  background:rgba(62,207,142,.1);color:var(--ok);font-size:12px;display:none}
+
+/* ---------- 详情页 ---------- */
+.kv{display:flex;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.kv:last-child{border-bottom:none}
+.kv .k{width:78px;color:var(--muted);flex-shrink:0}
+.review-item{border-top:1px dashed var(--line);padding:8px 0;font-size:12px;color:var(--muted)}
+.stars{font-size:26px;letter-spacing:6px;text-align:center;cursor:pointer;user-select:none}
+.stars span{color:var(--line)}
+.stars span.on{color:var(--sand)} /* 星级用暖沙金，契合品牌点缀色 */
+#back{padding:12px 14px 0;display:block;font-size:14px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<div id="modal-mask"><div id="modal"></div></div>
+
+<script>
+/* ============================================================
+   全局状态与工具
+   ============================================================ */
+const API = '/api/v1';
+const $  = s => document.querySelector(s);
+const app = $('#app');
+let RECORDER = null, RECHUNKS = [];   // MediaRecorder 录音状态
+
+/* 轻提示 toast：统一出口，3 秒自动消失 */
+let toastTimer;
+function toast(msg, isErr){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 3000);
+}
+
+/* 模态弹窗：openModal(innerHTML, 可选回调)；closeModal() 关闭 */
+function openModal(html, onOpen){
+  $('#modal').innerHTML = html;
+  $('#modal-mask').classList.add('show');
+  if (onOpen) onOpen($('#modal'));
+}
+function closeModal(){ $('#modal-mask').classList.remove('show'); }
+$('#modal-mask').addEventListener('click', e => { if (e.target.id === 'modal-mask') closeModal(); });
+
+/* 统一请求封装：自动带 token；401 清登录态回登录页 */
+async function api(path, opt = {}){
+  const token = localStorage.getItem('token');
+  const headers = {'Content-Type': 'application/json'};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const r = await fetch(API + path, {...opt, headers,
+    body: opt.body ? JSON.stringify(opt.body) : undefined});
+  if (r.status === 401){ logout(); throw new Error('登录已过期'); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || ('请求失败 ' + r.status));
+  return data;
+}
+function logout(){
+  localStorage.removeItem('token'); localStorage.removeItem('user');
+  location.hash = '#/login';
+}
+
+/* 登录守卫：未登录一律回登录页 */
+function requireLogin(){
+  if (!localStorage.getItem('token')){ location.hash = '#/login'; return false; }
+  return true;
+}
+
+/* 转义用户内容，防 XSS */
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* 枚举映射（对齐后端） */
+const TYPES  = ['学业答疑','生活互助','后勤服务','官方任务'];
+const URG    = ['低','普通','特急'];
+const STATUS = {created:'待发布', published:'已发布', accepted:'已接单',
+  in_progress:'进行中', completed:'已完成', blocked:'已拦截',
+  pending_manual_review:'待人工复核', ai_reviewing:'AI复核中', matching:'匹配中'};
+const star = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+/* 紧急程度展示：高红 / 中橙 / 低灰 */
+function urgBadge(u){
+  const cls = u === '特急' ? 'u-high' : u === '低' ? 'u-low' : 'u-mid';
+  return `<span class="${cls}">${esc(u || '普通')}</span>`;
+}
+/* 任务类型徽标：官方暖沙金，L1 绿 / L2 黄 / L3 红跟风险等级走 */
+function typeBadge(o){
+  if (o.is_official || o.task_type === '官方任务')
+    return `<span class="badge b-official">官方</span>`;
+  const lv = o.risk_level === 'L2' ? 'L2' : 'L1';
+  return `<span class="badge b-${lv}">${lv}</span>`;
+}
+
+/* ============================================================
+   Hash 路由
+   ============================================================ */
+const routes = {
+  '/login':   pgLogin,
+  '/square':  pgSquare,
+  '/publish': pgPublish,
+  '/order':   pgOrder,     // #/order?id=1
+  '/me':      pgMe,
+};
+function nav(){ location.hash = '#/' + arguments[0]; }
+window.addEventListener('hashchange', render);
+function render(){
+  const path = (location.hash.slice(1) || '/').split('?')[0];
+  const page = routes[path] || pgSquare;
+  if (path !== '/login' && !requireLogin()) return;
+  RECHUNKS = []; RECORDER = null;   // 切页时重置录音状态
+  page();
+  window.scrollTo(0, 0);
+}
+
+/* ============================================================
+   页面 1：登录
+   ============================================================ */
+function pgLogin(){
+  app.innerHTML = `
+  <div id="pg-login">
+    <div class="logo">
+      <div class="em" style="filter:drop-shadow(0 4px 12px rgba(47,163,154,.35))">🎓</div>
+      <h1>校园互助平台</h1>
+      <p>AI 赋能 · 语音求助 · 信用保障</p>
+    </div>
+    <form class="card" id="f">
+      <div class="fld" style="margin:0 0 12px"><input id="u" placeholder="学号 / 用户名" required></div>
+      <div class="fld" style="margin:0 0 16px"><input id="p" type="password" placeholder="密码" required></div>
+      <button class="btn block">登 录</button>
+      <p class="small muted" style="margin-top:12px;text-align:center">
+        Demo 账号：stu01 / stu02 · 密码 123456</p>
+    </form>
+  </div>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault();
+    try{
+      const d = await api('/users/login', {method:'POST',
+        body:{username: $('#u').value.trim(), password: $('#p').value}});
+      localStorage.setItem('token', d.token);
+      localStorage.setItem('user', JSON.stringify(d.user || {}));
+      toast('登录成功');
+      nav('square');
+    }catch(err){ toast(err.message, true); }
+  };
+}
+
+/* ============================================================
+   页面 2：任务广场
+   ============================================================ */
+let squareTab = '全部';
+function pgSquare(){
+  const tabs = ['全部', ...TYPES];
+  app.innerHTML = `
+    <div class="page-head">任务广场</div>
+    <div class="tabs">${tabs.map(t =>
+      `<button data-t="${t}" class="${t === squareTab ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div id="list"><div class="card muted">加载中…</div></div>
+    <button class="fab" onclick="location.hash='#/publish'">+ 发布求助</button>
+    <div id="tabbar">${tabbar('square')}</div>`;
+  $('.tabs').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    squareTab = b.dataset.t; pgSquare();
+  };
+  loadSquare();
+}
+async function loadSquare(){
+  const box = $('#list');
+  try{
+    // 已发布工单（后端默认排除自己发布的单——自己的单不能自己接，去「我的」查看）
+    const d = await api('/orders?status=published');
+    let items = d.items || [];
+    if (squareTab !== '全部')   // Tab 前端过滤；官方任务按 is_official 标识匹配（其 task_type 是讲座会务等具体类型）
+      items = items.filter(o => squareTab === '官方任务'
+        ? (o.is_official || o.task_type === '官方任务')
+        : o.task_type === squareTab);
+    if (!items.length){ box.innerHTML = '<div class="card muted">暂无可接任务，点击右下角发布求助</div>'; return; }
+    box.innerHTML = items.map(o => `
+      <div class="card o-card" style="transition:transform .15s,box-shadow .15s;cursor:pointer"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(4,14,16,.45)'"
+        onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow)'"
+        onclick="location.hash='#/order?id=${o.id}'">
+        <div class="row">${typeBadge(o)}<span class="grow"></span>${urgBadge(o.urgency)}</div>
+        <div class="title">${esc(o.title || o.description || '(无标题)')}</div>
+        <div class="o-meta">
+          <span>👤 ${esc(o.requester_name || ('#' + (o.requester_id ?? '-')))}</span>
+          <span>📍 ${esc(o.location || '不限')}</span>
+          <span>🕐 ${esc(o.time_slot || '随时')}</span>
+          <span>${esc(o.task_type)}</span>
+        </div>
+      </div>`).join('');
+  }catch(err){
+    box.innerHTML = `<div class="card muted">${esc(err.message)}</div>`;
+  }
+}
+
+/* ============================================================
+   页面 3：发布求助（文字 / 语音 → 智能解析 → 核对修改 → 提交）
+   ============================================================ */
+function pgPublish(){
+  app.innerHTML = `
+    <a href="javascript:history.back()" id="back">← 返回</a>
+    <div class="page-head">发布求助</div>
+    <div class="seg">
+      <button id="t-txt" class="on">📝 文字发布</button>
+      <button id="t-vox">🎤 语音发布</button>
+    </div>
+
+    <div id="pane-txt">
+      <div class="card">
+        <textarea id="txt" placeholder="例如：明天上午帮我从图书馆借三本书送到 6 号楼…"></textarea>
+        <button class="btn block" style="margin-top:12px" id="btn-parse">🤖 智能解析</button>
+      </div>
+    </div>
+
+    <div id="pane-vox" style="display:none">
+      <div class="card" style="text-align:center">
+        <p class="muted small">按住下方按钮说话，松开自动识别</p>
+        <button class="rec-btn" id="rec">🎙 按住说话</button>
+        <p class="small muted" id="rec-state">支持中文语音求助</p>
+      </div>
+    </div>
+
+    <div id="parsed" style="display:none">
+      <div class="parsed-tip" id="parsed-tip"></div>
+      <div class="card">
+        <div class="fld"><label>任务类型</label>
+          <select id="f-type">${TYPES.slice(0,3).map(t=>`<option>${t}</option>`).join('')}</select></div>
+        <div class="fld"><label>紧急程度</label>
+          <select id="f-urg">${URG.map(t=>`<option>${t}</option>`).join('')}</select></div>
+        <div class="fld"><label>地点</label><input id="f-loc" placeholder="如：图书馆"></div>
+        <div class="fld"><label>时间</label><input id="f-time" placeholder="如：明天上午"></div>
+        <div class="fld"><label>需求描述</label><textarea id="f-desc"></textarea></div>
+        <button class="btn block" id="btn-submit">确认发布</button>
+      </div>
+    </div>
+    <div id="tabbar">${tabbar()}</div>`;
+
+  /* -- 发布方式切换 -- */
+  $('#t-txt').onclick = () => { $('#pane-txt').style.display='';  $('#pane-vox').style.display='none'; };
+  $('#t-vox').onclick = () => { $('#pane-txt').style.display='none'; $('#pane-vox').style.display=''; };
+
+  /* -- 文字：智能解析 -- */
+  $('#btn-parse').onclick = () => doParse({ text: $('#txt').value.trim() });
+
+  /* -- 语音：MediaRecorder 按住录音，松开 → /ai/asr → 自动解析 -- */
+  const rec = $('#rec');
+  rec.addEventListener('touchstart', startRec); rec.addEventListener('touchend', stopRec);
+  rec.addEventListener('mousedown',  startRec); rec.addEventListener('mouseup',  stopRec);
+  async function startRec(e){
+    e.preventDefault();
+    if (RECORDER) return;
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      RECORDER = new MediaRecorder(stream);
+      RECHUNKS = [];
+      RECORDER.ondataavailable = ev => RECHUNKS.push(ev.data);
+      RECORDER.start();
+      rec.classList.add('rec'); rec.textContent = '🔴 松开识别';
+      $('#rec-state').textContent = '正在录音…';
+    }catch(err){ toast('无法访问麦克风：' + err.message, true); }
+  }
+  async function stopRec(e){
+    e.preventDefault();
+    if (!RECORDER) return;
+    const mr = RECORDER; RECORDER = null;
+    const done = new Promise(res => mr.onstop = res);
+    mr.stop(); await done;
+    mr.stream.getTracks().forEach(t => t.stop());
+    rec.classList.remove('rec'); rec.textContent = '🎙 按住说话';
+    if (!RECHUNKS.length) return;
+    $('#rec-state').textContent = '识别中…';
+    try{
+      const blob = new Blob(RECHUNKS, {type: mr.mimeType || 'audio/webm'});
+      // 后端 /ai/asr 是 JSON 接口（text? / audio_b64?），前端用 FileReader 把录音转 base64 上传
+      const b64 = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result).split(',')[1]);
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+      const d = await api('/ai/asr', {method:'POST',
+        body:{audio_b64: b64, filename: 'rec.webm'}});
+      if (!d.transcript) throw new Error('识别失败，请重试');
+      $('#rec-state').textContent = `识别结果：${d.transcript}（置信度 ${Math.round((d.confidence||0)*100)}%）`;
+      await doParse({transcript: d.transcript, asr_confidence: d.confidence});
+    }catch(err){ $('#rec-state').textContent = '就绪'; toast(err.message, true); }
+  }
+
+  /* -- 解析：POST /orders 用返回工单回显结构化表单（全部可改） -- */
+  async function doParse(payload){
+    if (!payload.text && !payload.transcript){ toast('请先输入或说出你的需求', true); return; }
+    const btn = $('#btn-parse');
+    btn && (btn.disabled = true);
+    try{
+      const d = await api('/orders', {method:'POST', body: payload});
+      const o = d.order;
+      /* L3 拦截：弹官方渠道指引，不进广场、不给发布 */
+      if (d.blocked || o.status === 'blocked'){
+        openModal(`
+          <h3 style="color:var(--danger)">⛔ 该需求已被拦截</h3>
+          <p class="muted" style="margin-bottom:8px">拦截原因：${esc(o.blocked_reason || '触发高风险规则')}</p>
+          <div class="card" style="margin:0 0 12px">
+            <p class="small">请通过官方渠道办理：</p>
+            <p style="margin-top:4px;color:var(--official)">${esc(o.official_channel_ref || '校内后勤服务中心 / 校园保卫处')}</p>
+          </div>
+          <button class="btn block ghost" onclick="closeModal()">我知道了</button>`);
+        return;
+      }
+      showParsed(o, d.blocked === false && o.status === 'published');
+    }catch(err){ toast(err.message, true); }
+    finally{ btn && (btn.disabled = false); }
+  }
+
+  /* -- 解析结果回显（可核对可修改，R6） -- */
+  function showParsed(o, autoPublished){
+    $('#parsed').style.display = '';
+    $('#parsed-tip').style.display = 'block';
+    $('#parsed-tip').textContent = autoPublished
+      ? `✅ 解析完成，风险等级 ${o.risk_level}，已自动发布（可直接去「我的」查看）`
+      : `⚠️ 解析完成，风险等级 ${o.risk_level}，需人工复核，请核对下方信息后确认`;
+    $('#f-type').value = o.task_type || '生活互助';
+    $('#f-urg').value  = o.urgency  || '普通';
+    $('#f-loc').value  = o.location || '';
+    $('#f-time').value = o.time_slot || '';
+    $('#f-desc').value = o.description || '';
+    $('#parsed').scrollIntoView({behavior:'smooth'});
+    $('#btn-submit').onclick = () => submitOrder(o);
+  }
+
+  /* -- 确认发布：/orders/{id}/confirm 提交修改后的槽位 -- */
+  async function submitOrder(o){
+    const body = {
+      title:       o.title || $('#f-desc').value.slice(0, 30),
+      task_type:   $('#f-type').value,
+      urgency:     $('#f-urg').value,
+      location:    $('#f-loc').value.trim(),
+      time_slot:   $('#f-time').value.trim(),
+      description: $('#f-desc').value.trim(),
+    };
+    try{
+      await api(`/orders/${o.id}/confirm`, {method:'POST', body});
+      toast('发布成功');
+      nav('me');   // 发布成功跳「我的」
+    }catch(err){ toast(err.message, true); }
+  }
+}
+
+/* ============================================================
+   页面 4：工单详情
+   ============================================================ */
+async function pgOrder(){
+  const id = new URLSearchParams(location.hash.split('?')[1]).get('id');
+  app.innerHTML = `<a href="javascript:history.back()" id="back">← 返回</a><div class="card muted">加载中…</div>`;
+  let o;
+  try{ o = await api('/orders/' + id); }   // GET /orders/{id} 直接返回工单 DTO（无包裹）
+  catch(err){ app.innerHTML = `<a href="javascript:history.back()" id="back">← 返回</a><div class="card muted">${esc(err.message)}</div>`; return; }
+  const me = JSON.parse(localStorage.getItem('user') || '{}');
+  const mine = me.id != null && String(me.id) === String(o.requester_id);
+  const taken = me.id != null && String(me.id) === String(o.volunteer_id);
+  // rating 是 dict {score, comment, ...}（rate 接口写入）
+  const rated = o.rating && o.rating.score;
+
+  /* 状态按钮逻辑 */
+  let action = '';
+  if (o.status === 'published' && !mine)
+    action = `<button class="btn block" id="a-accept">立即接单</button>`;
+  else if ((o.status === 'accepted' || o.status === 'in_progress') && taken)
+    action = `<button class="btn block" id="a-done">确认完成</button>`;
+  else if (o.status === 'completed' && mine && !rated)
+    action = `<button class="btn block" id="a-rate">⭐ 评价本单</button>`;
+  else if (o.status === 'published' && mine)
+    action = `<p class="small muted" style="text-align:center">这是你发布的任务，等待其他同学接单（可在「我的」查看进度）</p>`;
+  else if ((o.status === 'accepted' || o.status === 'in_progress') && !taken)
+    action = `<p class="small muted" style="text-align:center">该任务已被其他同学承接</p>`;
+
+  app.innerHTML = `
+    <a href="javascript:history.back()" id="back">← 返回</a>
+    <div class="page-head">工单详情</div>
+    <div class="card">
+      <div class="row">${typeBadge(o)}<span class="grow"></span>
+        <span class="badge b-status">${STATUS[o.status] || o.status}</span></div>
+      <div class="title" style="font-weight:700;font-size:16px;margin:8px 0 6px">${esc(o.title || '')}</div>
+      <div class="kv"><div class="k">类型</div><div>${esc(o.task_type)}</div></div>
+      <div class="kv"><div class="k">紧急程度</div><div>${urgBadge(o.urgency)}</div></div>
+      <div class="kv"><div class="k">地点</div><div>${esc(o.location || '-')}</div></div>
+      <div class="kv"><div class="k">时间</div><div>${esc(o.time_slot || '-')}</div></div>
+      <div class="kv"><div class="k">描述</div><div>${esc(o.description || '-')}</div></div>
+      <div class="kv"><div class="k">发布者</div><div>${esc(o.requester_name || ('#' + (o.requester_id ?? '-')))}${mine ? '（我）' : ''}</div></div>
+      <div class="kv"><div class="k">承接人</div><div>${o.volunteer_id ? '#' + esc(o.volunteer_id) + (taken ? '（我）' : '') : '暂无'}</div></div>
+      ${rated ? `<div class="kv"><div class="k">评分</div><div style="color:var(--warn)">${star(rated)}${o.rating.comment ? ' · ' + esc(o.rating.comment) : ''}</div></div>` : ''}
+    </div>
+    ${o.blocked_reason ? `<div class="card">
+        <p class="small" style="color:var(--danger)">⛔ 拦截信息：${esc(o.blocked_reason)}</p>
+        <p class="small muted">官方渠道：${esc(o.official_channel_ref || '-')}</p></div>` : ''}
+    ${(o.review_record || []).length ? `<div class="card">
+        <p class="small" style="font-weight:600;margin-bottom:6px">📋 复核记录</p>
+        ${o.review_record.map(r => `<div class="review-item">${esc(r)}</div>`).join('')}</div>` : ''}
+    <div class="card">${action || '<p class="small muted" style="text-align:center">暂无可执行操作</p>'}</div>
+    <div id="tabbar">${tabbar()}</div>`;
+
+  /* 接单 */
+  const bAcc = $('#a-accept');
+  if (bAcc) bAcc.onclick = async () => {
+    bAcc.disabled = true;
+    try{ await api(`/orders/${id}/accept`, {method:'POST'}); toast('接单成功'); pgOrder(); }
+    catch(err){ toast(err.message, true); bAcc.disabled = false; }
+  };
+  /* 完成确认 */
+  const bDone = $('#a-done');
+  if (bDone) bDone.onclick = async () => {
+    bDone.disabled = true;
+    try{ await api(`/orders/${id}/complete`, {method:'POST'}); toast('已完成'); pgOrder(); }
+    catch(err){ toast(err.message, true); bDone.disabled = false; }
+  };
+  /* 评价：星级 + 文字 */
+  const bRate = $('#a-rate');
+  if (bRate) bRate.onclick = () => {
+    let sel = 5;
+    openModal(`
+      <h3>评价本单</h3>
+      <div class="stars" id="st">${'<span class="on">★</span>'.repeat(5)}</div>
+      <textarea id="rt" placeholder="说说这次互助体验（选填）" style="margin:12px 0"></textarea>
+      <button class="btn block" id="rk">提交评价</button>`,
+      m => {
+        m.querySelector('#st').onclick = e => {
+          const i = [...m.querySelectorAll('#st span')].indexOf(e.target);
+          if (i < 0) return;
+          sel = i + 1;
+          m.querySelectorAll('#st span').forEach((s, j) => s.classList.toggle('on', j <= i));
+        };
+        m.querySelector('#rk').onclick = async () => {
+          try{
+            await api(`/orders/${id}/rate`, {method:'POST', body:{score: sel, comment: m.querySelector('#rt').value.trim()}});
+            closeModal(); toast('感谢评价'); pgOrder();
+          }catch(err){ toast(err.message, true); }
+        };
+      });
+  };
+}
+
+/* ============================================================
+   页面 5：我的（头像昵称信用分 + 我发布的/我承接的）
+   ============================================================ */
+let meTab = 'pub';
+function pgMe(){
+  const u = JSON.parse(localStorage.getItem('user') || '{}');
+  app.innerHTML = `
+    <div class="card row" style="margin-top:14px;
+      background:linear-gradient(135deg,var(--panel) 0%,var(--panel-2) 100%)"> <!-- 头像卡微渐变 -->
+      <div style="width:52px;height:52px;border-radius:50%;
+        background:linear-gradient(135deg,var(--accent),var(--accent-2));
+        display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🙂</div>
+      <div class="grow">
+        <div style="font-weight:700">${esc(u.real_name || u.username || '同学')}</div>
+        <div class="small muted">${esc(u.username || '')} · ${esc(u.tenant_id || '')}</div>
+      </div>
+      <div style="text-align:center">
+        <div style="color:var(--sand);font-weight:700;font-size:18px">${u.credit_score ?? '-'}</div>
+        <div class="small muted">信用分</div>
+      </div>
+      <button class="small muted" id="out" style="padding:4px 8px">退出</button>
+    </div>
+    <!-- 信用记录入口（R15：加减分可追溯可申诉）：展示积分流水，支持对单笔流水申诉 -->
+    <div class="card" id="creditBox" style="padding:12px 14px">
+      <div class="row" style="cursor:pointer" id="creditToggle">
+        <span style="font-weight:700">💳 我的信用记录</span>
+        <span class="grow"></span><span class="small muted" id="creditArrow">展开 ▾</span>
+      </div>
+      <div id="creditBody" style="display:none;margin-top:10px"></div>
+    </div>
+    <div class="tabs">
+      <button data-t="pub" class="${meTab==='pub'?'on':''}">我发布的</button>
+      <button data-t="acc" class="${meTab==='acc'?'on':''}">我承接的</button>
+    </div>
+    <div id="list"><div class="card muted">加载中…</div></div>
+    <button class="fab" onclick="location.hash='#/publish'">+ 发布求助</button>
+    <div id="tabbar">${tabbar('me')}</div>`;
+  $('#out').onclick = () => { logout(); toast('已退出'); };
+  $('.tabs').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    meTab = b.dataset.t; pgMe();
+  };
+  /* 信用记录展开/收起：懒加载流水（避免每次进页面多打一次接口） */
+  $('#creditToggle').onclick = () => {
+    const body = $('#creditBody'), open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    $('#creditArrow').textContent = open ? '展开 ▾' : '收起 ▴';
+    if (!open && !body.dataset.loaded) loadCredit(body);
+  };
+  loadMe();
+}
+
+/* ---------- 信用记录：积分流水列表 + 单笔申诉（R15） ---------- */
+async function loadCredit(box){
+  const me = JSON.parse(localStorage.getItem('user') || '{}');
+  try{
+    const d = await api(`/credits/${me.id}/ledger`);
+    box.dataset.loaded = '1';
+    if (!d.items || !d.items.length){
+      box.innerHTML = '<div class="small muted">暂无积分变动记录</div>'; return;
+    }
+    box.innerHTML = d.items.map(r => `
+      <div class="row" style="padding:8px 0;border-top:1px dashed var(--line);align-items:flex-start">
+        <div class="grow">
+          <div class="small" style="font-weight:600">${esc(r.event || '')}
+            ${r.delta > 0 ? '<span style="color:var(--ok)">+' : '<span style="color:var(--danger)">'}${r.delta}</span></div>
+          <div class="small muted">${esc(r.remark || '')} · ${esc((r.created_at || '').replace('T',' ').slice(0,16))}</div>
+        </div>
+        <button class="small" style="padding:3px 10px;border:1px solid var(--line);border-radius:6px"
+          onclick="appealLedger(${r.id}, '${esc(r.event || '')}')">申诉</button>
+      </div>`).join('');
+  }catch(err){ box.innerHTML = `<div class="small muted">${esc(err.message)}</div>`; }
+}
+/* 对单笔积分流水发起申诉：POST /credits/appeal（R15 可申诉） */
+function appealLedger(ledgerId, ev){
+  openModal(`
+    <h3>申诉 · ${esc(ev || '积分变动')}</h3>
+    <p class="small muted" style="margin:6px 0 10px">流水 #${ledgerId}：请说明您认为该加减分有误的理由，提交后由管理员处理。</p>
+    <textarea id="apReason" placeholder="例如：该次任务已按约定完成，扣分有误" style="width:100%;min-height:90px;
+      border:1px solid var(--line);border-radius:8px;padding:10px;font-size:15px;font-family:inherit"></textarea>
+    <div class="row" style="margin-top:12px;gap:10px">
+      <button class="btn ghost grow" id="apCancel">取消</button>
+      <button class="btn primary grow" id="apOk">提交申诉</button>
+    </div>`);
+  $('#apCancel').onclick = closeModal;
+  $('#apOk').onclick = async () => {
+    const reason = $('#apReason').value.trim();
+    if (!reason) return toast('请填写申诉理由');
+    try{
+      const d = await api('/credits/appeal', {method:'POST', body:{ledger_id: ledgerId, reason}});
+      closeModal(); toast(d.message || '申诉已提交');
+    }catch(err){ toast(err.message); }
+  };
+}
+async function loadMe(){
+  const box = $('#list');
+  try{
+    const d = await api('/orders/mine');
+    const key = meTab === 'pub' ? 'requester_id' : 'volunteer_id';
+    const me  = JSON.parse(localStorage.getItem('user') || '{}');
+    const items = (d.items || []).filter(o => String(o[key]) === String(me.id));
+    if (!items.length){ box.innerHTML = `<div class="card muted">暂无${meTab==='pub'?'发布':'承接'}的工单</div>`; return; }
+    box.innerHTML = items.map(o => `
+      <div class="card o-card" onclick="location.hash='#/order?id=${o.id}'">
+        <div class="row">${typeBadge(o)}
+          <span class="grow"></span><span class="badge b-status">${STATUS[o.status] || o.status}</span></div>
+        <div class="title">${esc(o.title || o.description || '(无标题)')}</div>
+        <div class="o-meta"><span>🕐 ${esc(o.created_at || '')}</span></div>
+      </div>`).join('');
+  }catch(err){ box.innerHTML = `<div class="card muted">${esc(err.message)}</div>`; }
+}
+
+/* 底部 TabBar（isHome：广场/我的高亮） */
+function tabbar(cur){
+  return `
+    <a href="#/square" class="${cur==='square'?'on':''}"><span class="ico">🏠</span>广场</a>
+    <a href="#/publish"><span class="ico">➕</span>发布</a>
+    <a href="#/me" class="${cur==='me'?'on':''}"><span class="ico">🙂</span>我的</a>`;
+}
+
+render();   // 启动
+</script>
+</body>
+</html>

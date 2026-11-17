@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>校园互助平台 · 管理端</title>
+<style>
+:root{
+  /* 品牌色「青砚」：青绿松石主色 + 暖沙点缀（替换默认 indigo，去掉"AI 味"配色） */
+  --primary:#0e7c86;--primary-weak:#e6f4f4;--primary-deep:#0a555d;
+  --primary-2:#12938f;            /* 渐变辅色 */
+  --sand:#c8a45d;                 /* 暖沙点缀（官方标识/Logo 呼应） */
+  --bg:#f6f5f1;--card:#ffffff;--text:#1c2b2d;--muted:#667c7f;--border:#e3e6e0;
+  --l1:#0a7d55;--l1-bg:#e9f7f0;--l2:#b4690e;--l2-bg:#fdf3e3;--l3:#c0392b;--l3-bg:#fdeeec;
+  --info:#0e7490;--sidebar:#122a2c;--sidebar-2:#17393c;
+  --shadow:0 1px 2px rgba(28,43,45,.05),0 4px 16px rgba(28,43,45,.06);
+  --radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:"HarmonyOS Sans SC","MiSans","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif}
+body{background:var(--bg);color:var(--text);font-size:14px}
+.hidden{display:none!important}
+
+/* ---------- 登录页 ---------- */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  /* 青砚双色调渐变 + 细网格纹理，替代紫色大渐变 */
+  background:
+    radial-gradient(circle at 18% 22%, rgba(200,164,93,.14) 0%, transparent 42%),
+    linear-gradient(135deg,#0c3f44 0%,#0e7c86 58%,#12938f 100%)}
+.login-card{background:var(--card);padding:42px 38px;border-radius:16px;
+  box-shadow:0 24px 60px rgba(9,48,52,.35);width:380px}
+.login-card h1{font-size:21px;margin-bottom:6px;color:var(--text)}
+.login-card .sub{color:var(--muted);font-size:13px;margin-bottom:26px}
+.login-card input{margin-bottom:14px}
+.login-foot{margin-top:18px;font-size:12px;color:var(--muted);text-align:center}
+
+/* ---------- 表单控件 ---------- */
+input,select,textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+  font-size:14px;outline:none;background:#fff;color:var(--text);transition:border .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(14,124,134,.13)}
+button{background:var(--primary);color:#fff;border:none;padding:9px 16px;border-radius:8px;
+  font-size:14px;cursor:pointer;transition:filter .15s,transform .05s}
+button:hover{filter:brightness(1.08)}
+button:active{transform:translateY(1px)}
+button.ghost{background:#fff;color:var(--primary);border:1px solid #b7dcd9}
+button.ghost:hover{background:var(--primary-weak)}
+button.danger{background:var(--l3)}
+button.small{padding:5px 11px;font-size:12.5px;border-radius:7px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:12px 0 5px}
+.err{color:var(--l3);font-size:13px;min-height:18px;margin-top:8px}
+
+/* ---------- 主布局 ---------- */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:216px;background:var(--sidebar);color:#b8cdc9;flex-shrink:0;
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sidebar .logo{display:flex;align-items:center;gap:10px;color:#fff;font-weight:600;
+  padding:20px 20px 18px;font-size:15.5px;border-bottom:1px solid #1d3d40}
+.logo-badge{width:30px;height:30px;border-radius:8px;
+  background:linear-gradient(135deg,var(--sand),#a97f2f); /* 暖沙金 Logo，呼应品牌点缀色 */
+  display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.logo-sub{font-size:11px;color:#7f9995;font-weight:400;display:block;margin-top:1px}
+.nav{padding:12px 10px;flex:1;overflow-y:auto}
+.nav-group{font-size:11px;color:#5f7d79;padding:14px 10px 6px;letter-spacing:1px}
+.nav-item{padding:10px 12px;border-radius:9px;cursor:pointer;font-size:13.5px;margin-bottom:2px;
+  display:flex;align-items:center;gap:10px;transition:background .15s}
+.nav-item:hover{background:var(--sidebar-2)}
+.nav-item.active{background:var(--primary);color:#fff;font-weight:500;
+  box-shadow:inset 3px 0 0 var(--sand)} /* 选中态左缘暖沙条，与 Logo 呼应 */
+.nav-item .ico{width:18px;text-align:center;opacity:.9}
+.sidebar-foot{padding:14px 16px;border-top:1px solid #1e293b;font-size:12px;color:#7f9995}
+
+.main{flex:1;padding:0;min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:14px 28px;
+  display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10}
+.topbar h2{font-size:17px;font-weight:600}
+.topbar .crumb{font-size:12px;color:var(--muted);margin-top:2px}
+.userbox{display:flex;align-items:center;gap:12px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-weak);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px}
+.whoami{font-size:13px}
+.whoami .role{color:var(--muted);font-size:11.5px;display:block;text-align:right}
+.content{padding:24px 28px;flex:1}
+
+/* ---------- 卡片 / 统计 ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:20px}
+.stat-card{background:var(--card);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);
+  border:1px solid var(--border);position:relative;overflow:hidden;
+  transition:transform .15s,box-shadow .15s}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 22px rgba(28,43,45,.10)} /* 悬停微浮起 */
+.stat-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,var(--primary),var(--primary-2));opacity:.55} /* 左缘品牌色条 */
+.stat-card .num{font-size:28px;font-weight:700;color:var(--text);line-height:1.2}
+.stat-card .num.acc{color:var(--l1)}.stat-card .num.warn{color:var(--l2)}.stat-card .num.bad{color:var(--l3)}
+.stat-card .label{color:var(--muted);font-size:12.5px;margin-top:5px}
+.stat-card .hint{font-size:11.5px;color:#8fa5a1;margin-top:2px}
+.stat-ico{position:absolute;right:14px;top:14px;width:36px;height:36px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:17px}
+.panel{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);
+  box-shadow:var(--shadow);padding:18px 20px;margin-bottom:20px}
+.panel h3{font-size:14.5px;margin-bottom:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.panel h3::before{content:"";width:4px;height:14px;border-radius:2px;
+  background:linear-gradient(180deg,var(--primary),var(--sand))} /* 标题小色旗：品牌双色 */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+
+/* ---------- 表格 ---------- */
+.table-wrap{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);
+  box-shadow:var(--shadow);overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle}
+th{background:#f4f5f1;color:var(--muted);font-weight:500;font-size:12.5px;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#f2f7f5}
+.td-sub{color:var(--muted);font-size:12px}
+.td-clip{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- 标签 ---------- */
+.tag{display:inline-block;padding:2.5px 10px;border-radius:999px;font-size:12px;font-weight:500;line-height:1.5}
+.tag.L1{background:var(--l1-bg);color:var(--l1)}.tag.L2{background:var(--l2-bg);color:var(--l2)}
+.tag.L3{background:var(--l3-bg);color:var(--l3)}
+.tag.published,.tag.completed,.tag.evaluated{background:var(--l1-bg);color:var(--l1)}
+.tag.pending_manual_review{background:var(--l2-bg);color:var(--l2)}
+.tag.blocked,.tag.cancelled{background:var(--l3-bg);color:var(--l3)}
+.tag.created,.tag.ai_reviewing{background:#eef1ec;color:#667c7f}
+.tag.accepted,.tag.in_progress{background:#e6f4f4;color:var(--primary)}
+.tag.plain{background:#eef1ec;color:#52696c}
+.tag.official{background:#f7ecd6;color:#8a6417}
+
+/* ---------- 工具条 / 筛选 ---------- */
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+.toolbar .left{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toolbar select,.toolbar input{width:auto;min-width:110px}
+.toolbar input{width:200px}
+.page-note{color:var(--muted);font-size:12.5px}
+.pager{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
+
+/* ---------- 弹窗 ---------- */
+.modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;
+  justify-content:center;z-index:50;backdrop-filter:blur(2px)}
+.modal{background:#fff;border-radius:14px;padding:26px 28px;width:480px;max-height:88vh;overflow:auto;
+  box-shadow:0 24px 60px rgba(0,0,0,.25)}
+.modal h3{margin-bottom:4px;font-size:16px}
+.modal .sub{color:var(--muted);font-size:12.5px;margin-bottom:8px}
+.modal-actions{display:flex;gap:10px;margin-top:20px}
+.modal-actions button{flex:1}
+.detail-list{font-size:13px;line-height:1.9}
+.detail-list b{color:var(--muted);font-weight:500;margin-right:6px}
+
+/* ---------- 迷你趋势图 ---------- */
+.bars{display:flex;align-items:flex-end;gap:10px;height:110px;padding-top:8px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.bar{width:70%;max-width:34px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#2aa9a3,var(--primary));
+  min-height:3px;transition:height .3s}
+.bar.bad{background:linear-gradient(180deg,#e07b6d,var(--l3))}
+.bar-label{font-size:10.5px;color:var(--muted)}
+.bar-num{font-size:11px;color:var(--text)}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:10px}
+.legend .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.empty{color:var(--muted);text-align:center;padding:46px;background:var(--card);
+  border-radius:var(--radius);border:1px dashed var(--border)}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--sidebar);color:#fff;
+  padding:11px 22px;border-radius:10px;font-size:13.5px;z-index:99;box-shadow:0 10px 30px rgba(9,48,52,.3);
+  animation:fadein .18s}
+@keyframes fadein{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1}}
+code{background:#eef2ef;padding:1px 6px;border-radius:5px;font-size:12px;color:var(--primary-deep)}
+</style>
+</head>
+<body>
+
+<!-- 登录页 -->
+<div id="loginPage" class="login-wrap">
+  <div class="login-card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <div class="logo-badge">🤝</div>
+      <div><h1>校园互助平台</h1><div class="sub">AI赋能 · 运营管理端 v0.4.3</div></div>
+    </div>
+    <input id="loginUser" placeholder="用户名" value="admin">
+    <input id="loginPass" type="password" placeholder="密码" value="admin123">
+    <div class="err" id="loginErr"></div>
+    <button style="width:100%;padding:11px" onclick="doLogin()">登 录</button>
+    <div class="login-foot">演示账号 admin / admin123 ·济南大学创新训练项目</div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div id="mainPage" class="layout hidden">
+  <div class="sidebar">
+    <div class="logo"><div class="logo-badge">🤝</div>
+      <div>互助平台管理端<span class="logo-sub">AI Campus Mutual-Aid</span></div></div>
+    <div class="nav">
+      <div class="nav-group">总览</div>
+      <div class="nav-item" data-page="dashboard" onclick="nav('dashboard')"><span class="ico">📊</span>运营看板</div>
+      <div class="nav-group">工单运营</div>
+      <div class="nav-item" data-page="review" onclick="nav('review')"><span class="ico">🧐</span>人工复核
+        <span id="navReviewBadge" class="tag L2 hidden" style="margin-left:auto">0</span></div>
+      <div class="nav-item" data-page="orders" onclick="nav('orders')"><span class="ico">🗂</span>订单管理</div>
+      <div class="nav-item" data-page="official" onclick="nav('official')"><span class="ico">📢</span>官方任务</div>
+      <div class="nav-group">平台配置</div>
+      <div class="nav-item" data-page="riskRules" onclick="nav('riskRules')"><span class="ico">🛡</span>风险规则</div>
+      <div class="nav-item" data-page="creditRules" onclick="nav('creditRules')"><span class="ico">💰</span>积分规则</div>
+      <div class="nav-group">账号与安全</div>
+      <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ico">👥</span>用户管理</div>
+      <div class="nav-item" data-page="audit" onclick="nav('audit')"><span class="ico">📄</span>审计日志</div>
+    </div>
+    <div class="sidebar-foot">v0.4.3 · SQLite 单机版</div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <div><h2 id="pageTitle">运营看板</h2><div class="crumb" id="pageCrumb">平台运营总览</div></div>
+      <div class="userbox">
+        <div class="whoami" id="whoami"></div>
+        <div class="avatar" id="avatar">管</div>
+        <button class="ghost small" onclick="logout()">退出</button>
+      </div>
+    </div>
+    <div class="content" id="pageContent"></div>
+  </div>
+</div>
+
+<!-- 通用弹窗 -->
+<div id="modal" class="modal-mask hidden"><div class="modal" id="modalBody"></div></div>
+
+<script>
+const API = location.origin;
+let TOKEN = localStorage.getItem('aic_token') || '';
+let ME = JSON.parse(localStorage.getItem('aic_me') || 'null');
+let CURRENT_PAGE = 'dashboard';
+let ORDERS_FILTER = {status:'', risk:'', kw:''};
+
+async function api(path, method = 'GET', body) {
+  const opt = {method, headers: {'Content-Type': 'application/json'}};
+  if (TOKEN) opt.headers['Authorization'] = 'Bearer ' + TOKEN;
+  if (body !== undefined) opt.body = JSON.stringify(body);
+  const r = await fetch(API + path, opt);
+  if (r.status === 401) { showLogin(); throw new Error('登录已过期'); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+  return data;
+}
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),2200);}
+function fmtTime(s){return esc((s||'').replace('T',' ').slice(0,19));}
+function tagOf(v){return `<span class="tag ${esc(v)}">${esc(v)}</span>`;}
+
+/* ---------- 登录 ---------- */
+async function doLogin() {
+  const err = document.getElementById('loginErr');
+  err.textContent = '';
+  try {
+    const d = await api('/api/v1/users/login', 'POST', {
+      username: document.getElementById('loginUser').value.trim(),
+      password: document.getElementById('loginPass').value
+    });
+    TOKEN = d.token; ME = d.user;
+    localStorage.setItem('aic_token', TOKEN);
+    localStorage.setItem('aic_me', JSON.stringify(ME));
+    showMain();
+  } catch (e) { err.textContent = e.message; }
+}
+function logout() { localStorage.removeItem('aic_token'); localStorage.removeItem('aic_me'); showLogin(); }
+function showLogin() {
+  document.getElementById('loginPage').classList.remove('hidden');
+  document.getElementById('mainPage').classList.add('hidden');
+}
+function showMain() {
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('mainPage').classList.remove('hidden');
+  const name = ME ? (ME.real_name || ME.username) : '';
+  document.getElementById('whoami').innerHTML = esc(name) + '<span class="role">管理员</span>';
+  document.getElementById('avatar').textContent = (ME && ME.username || '?').slice(0,1).toUpperCase();
+  nav('dashboard');
+  refreshReviewBadge();
+}
+
+/* ---------- 导航 ---------- */
+const PAGES = {
+  dashboard:['运营看板','平台运营总览 · 近7日趋势'], review:['人工复核队列','L2 预警工单 · 通过/驳回/改判'],
+  orders:['订单管理','全部工单 · 筛选/详情/取消'], official:['官方志愿任务','发布与管理官方任务（R18）'],
+  riskRules:['风险分级规则','规则即配置 · 修改即时生效（R11）'], creditRules:['积分规则','事件积分配置（6.4）'],
+  users:['用户管理','账号/角色/信用分'], audit:['审计日志','拦截/复核/规则变更全留痕（R10）']};
+function nav(page) {
+  CURRENT_PAGE = page;
+  document.getElementById('pageTitle').textContent = PAGES[page][0];
+  document.getElementById('pageCrumb').textContent = PAGES[page][1];
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+  ({dashboard:renderDashboard, review:renderReview, orders:renderOrders, official:renderOfficial,
+    riskRules:renderRiskRules, creditRules:renderCreditRules, users:renderUsers, audit:renderAudit})[page]();
+}
+
+/* ---------- 弹窗 / 复核角标 ---------- */
+function openModal(html){document.getElementById('modalBody').innerHTML=html;document.getElementById('modal').classList.remove('hidden');}
+function closeModal(){document.getElementById('modal').classList.add('hidden');}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+async function refreshReviewBadge(){
+  try{
+    const d = await api('/api/v1/admin/review-queue');
+    const b = document.getElementById('navReviewBadge');
+    b.classList.toggle('hidden', !d.items.length);
+    b.textContent = d.items.length;
+  }catch(e){}
+}
+
+/* ---------- 页面：看板 ---------- */
+const STATUS_LABEL = {created:'已创建',ai_reviewing:'AI审核中',pending_manual_review:'待人工复核',blocked:'已拦截',
+  published:'已发布',matching:'匹配中',accepted:'已接单',in_progress:'进行中',completed:'已完成',
+  evaluated:'已评价',cancelled:'已取消'};
+async function renderDashboard() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const d = await api('/api/v1/admin/dashboard');
+    const st = d.orders_by_status || {}, lv = d.orders_by_risk_level || {};
+    const trend = d.trend_7d || {};
+    const entries = Object.entries(trend);
+    const maxV = Math.max(1, ...entries.map(([,v])=>v.created));
+    const bars = entries.map(([day,v]) => `<div class="bar-col">
+      <div class="bar-num">${v.created}</div>
+      <div class="bar" style="height:${Math.round(v.created/maxV*72)+4}px"></div>
+      <div class="bar-label">${day.slice(5)}</div></div>`).join('');
+    const badBars = entries.map(([day,v]) => `<div class="bar-col">
+      <div class="bar-num">${v.blocked}</div>
+      <div class="bar bad" style="height:${Math.round((v.blocked/maxV)*72)+4}px"></div>
+      <div class="bar-label">${day.slice(5)}</div></div>`).join('');
+    c.innerHTML = `
+      <div class="cards">
+        <div class="stat-card"><div class="stat-ico" style="background:var(--primary-weak)">👥</div>
+          <div class="num">${d.total_users}</div><div class="label">注册用户</div><div class="hint">含学生/适老/管理员</div></div>
+        <div class="stat-card"><div class="stat-ico" style="background:var(--primary-weak)">🗂</div>
+          <div class="num">${d.total_orders}</div><div class="label">工单总数</div><div class="hint">今日新增 ${d.today_orders}</div></div>
+        <div class="stat-card"><div class="stat-ico" style="background:var(--l2-bg)">🧐</div>
+          <div class="num warn">${d.pending_review}</div><div class="label">待人工复核</div><div class="hint">L2 预警队列</div></div>
+        <div class="stat-card"><div class="stat-ico" style="background:var(--l3-bg)">🚫</div>
+          <div class="num bad">${d.blocked}</div><div class="label">L3 拦截</div><div class="hint">硬拦截 · 已引导官方渠道</div></div>
+        <div class="stat-card"><div class="stat-ico" style="background:var(--l1-bg)">💰</div>
+          <div class="num acc">${d.credit_flows}</div><div class="label">积分流水</div><div class="hint">可追溯事件结算</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel"><h3>近 7 日新建工单</h3><div class="bars">${bars}</div>
+          <div class="legend"><span><span class="dot" style="background:var(--primary)"></span>新建工单</span></div></div>
+        <div class="panel"><h3>近 7 日拦截</h3><div class="bars">${badBars}</div>
+          <div class="legend"><span><span class="dot" style="background:var(--l3)"></span>L3/人工驳回拦截</span></div></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel"><h3>工单状态分布</h3>${Object.entries(st).map(([k,v])=>{
+          const label = STATUS_LABEL[k]||k;
+          const pct = d.total_orders?Math.round(v/d.total_orders*100):0;
+          return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+            <span style="width:88px;font-size:12.5px;color:var(--muted)">${esc(label)}</span>
+            <div style="flex:1;height:8px;background:#eef1ec;border-radius:4px;overflow:hidden">
+              <div style="width:${pct}%;height:100%;background:var(--primary);border-radius:4px"></div></div>
+            <span style="width:56px;font-size:12.5px;text-align:right">${v} 单</span></div>`;}).join('')||'<div class="page-note">暂无数据</div>'}</div>
+        <div class="panel"><h3>风险等级分布</h3>${['L1','L2','L3'].map(k=>`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+            <span class="tag ${k}">${k}</span>
+            <div style="flex:1;height:8px;background:#eef1ec;border-radius:4px;overflow:hidden">
+              <div style="width:${d.total_orders?Math.round((lv[k]||0)/d.total_orders*100):0}%;height:100%;
+                background:${k==='L1'?'var(--l1)':k==='L2'?'var(--l2)':'var(--l3)'};border-radius:4px"></div></div>
+            <span style="width:56px;font-size:12.5px;text-align:right">${lv[k]||0} 单</span></div>`).join('')}
+          <div class="page-note" style="margin-top:8px">官方任务累计 ${d.official_tasks} 个</div></div>
+      </div>`;
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ---------- 页面：复核队列 ---------- */
+async function renderReview() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const d = await api('/api/v1/admin/review-queue');
+    if (!d.items.length) { c.innerHTML = '<div class="empty">✅ 暂无待复核工单，风控队列已清空</div>'; return; }
+    c.innerHTML = `<div class="toolbar"><span class="page-note">共 ${d.items.length} 条待复核</span></div>
+      <div class="table-wrap"><table><thead><tr><th>工单号</th><th>标题</th><th>类型</th><th>紧急度</th>
+      <th>风险</th><th>置信度</th><th>转写文本</th><th style="width:180px">操作</th></tr></thead><tbody>` +
+      d.items.map(o => `<tr>
+        <td class="td-sub">${esc(o.work_order_no)}</td><td class="td-clip" title="${esc(o.title)}">${esc(o.title)}</td>
+        <td>${esc(o.task_type)}</td><td>${esc(o.urgency)}</td>
+        <td>${tagOf(o.risk_level)}</td><td>${(o.risk_confidence*100).toFixed(0)}%</td>
+        <td class="td-clip td-sub" title="${esc(o.transcript)}">${esc(o.transcript)}</td>
+        <td>
+          <button class="small" onclick="decide(${o.id},'approve')">通过</button>
+          <button class="small ghost" onclick="decide(${o.id},'reject')">驳回</button>
+          <button class="small ghost" onclick="decide(${o.id},'reclassify')">改判</button>
+        </td></tr>`).join('') + '</tbody></table></div>';
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function decide(id, decision) {
+  let body = {decision, opinion: ''};
+  if (decision === 'reclassify') {
+    const lv = prompt('改判等级（L1/L2/L3）：', 'L1');
+    if (!lv) return;
+    body.new_level = lv.toUpperCase();
+  }
+  body.opinion = prompt('复核意见（留痕）：', decision==='approve'?'同意发布':(decision==='reject'?'信息不全驳回':'')) || '';
+  try { await api(`/api/v1/admin/review-queue/${id}/decide`, 'POST', body); toast('复核完成'); renderReview(); refreshReviewBadge(); }
+  catch (e) { alert(e.message); }
+}
+
+/* ---------- 页面：订单管理 ---------- */
+async function renderOrders() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const f = ORDERS_FILTER;
+    const qs = new URLSearchParams();
+    if (f.status) qs.set('status', f.status);
+    if (f.risk) qs.set('risk_level', f.risk);
+    if (f.kw) qs.set('keyword', f.kw);
+    qs.set('size', '100');
+    const d = await api('/api/v1/admin/orders?' + qs.toString());
+    const rows = d.items.length ? `<table><thead><tr><th>工单号</th><th>标题</th><th>类型</th><th>地点</th>
+      <th>风险</th><th>状态</th><th>来源</th><th>创建时间</th><th style="width:150px">操作</th></tr></thead><tbody>` +
+      d.items.map(o => `<tr>
+        <td class="td-sub">${esc(o.work_order_no)}</td>
+        <td class="td-clip" title="${esc(o.title)}">${esc(o.title)}</td>
+        <td>${esc(o.task_type)}</td><td>${esc(o.location)||'—'}</td>
+        <td>${tagOf(o.risk_level)}</td><td>${tagOf(o.status)}</td>
+        <td>${o.is_official?'<span class="tag official">官方</span>':'<span class="tag plain">个人</span>'}</td>
+        <td class="td-sub">${fmtTime(o.created_at)}</td>
+        <td><button class="small ghost" onclick="orderDetail(${o.id})">详情</button>
+            <button class="small ghost" onclick="adminCancel(${o.id})">取消</button></td>
+      </tr>`).join('') + '</tbody></table>' : '<div class="empty">无匹配工单</div>';
+    const statusOpts = Object.entries(STATUS_LABEL).map(([k,v])=>
+      `<option value="${k}" ${f.status===k?'selected':''}>${v}</option>`).join('');
+    c.innerHTML = `<div class="toolbar">
+      <div class="left">
+        <select id="fStatus" onchange="applyOrderFilter()"><option value="">全部状态</option>${statusOpts}</select>
+        <select id="fRisk" onchange="applyOrderFilter()">
+          <option value="">全部风险</option><option ${f.risk==='L1'?'selected':''}>L1</option>
+          <option ${f.risk==='L2'?'selected':''}>L2</option><option ${f.risk==='L3'?'selected':''}>L3</option></select>
+        <input id="fKw" placeholder="搜索标题/地点/工单号" value="${esc(f.kw)}" onkeydown="if(event.key==='Enter')applyOrderFilter()">
+        <button class="small ghost" onclick="applyOrderFilter()">筛选</button>
+      </div>
+      <span class="page-note">共 ${d.total} 条</span></div>` + rows;
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function applyOrderFilter(){
+  ORDERS_FILTER = {status:document.getElementById('fStatus').value,
+    risk:document.getElementById('fRisk').value, kw:document.getElementById('fKw').value.trim()};
+  renderOrders();
+}
+async function orderDetail(id) {
+  try {
+    const o = await api(`/api/v1/admin/orders/${id}`);
+    openModal(`<h3>工单详情</h3><div class="sub">${esc(o.work_order_no)}</div>
+      <div class="detail-list">
+        <div><b>标题</b>${esc(o.title)}</div>
+        <div><b>状态</b>${tagOf(o.status)}　<b style="margin-left:14px">风险</b>${tagOf(o.risk_level)}
+          （置信度 ${(o.risk_confidence*100).toFixed(0)}%）</div>
+        <div><b>类型</b>${esc(o.task_type)}　<b style="margin-left:14px">紧急度</b>${esc(o.urgency)}</div>
+        <div><b>地点</b>${esc(o.location)||'—'}　<b style="margin-left:14px">时间</b>${esc(o.time_slot)||'—'}</div>
+        <div><b>租户</b>${esc(o.tenant_id)}　<b style="margin-left:14px">来源</b>${o.is_official?'官方任务':'个人工单'}</div>
+        <div><b>转写</b>${esc(o.transcript)}</div>
+        <div><b>描述</b>${esc(o.description)||'—'}</div>
+        ${o.blocked_reason?`<div><b>拦截/取消原因</b>${esc(o.blocked_reason)}${o.blocked_by?'（'+esc(o.blocked_by)+'）':''}</div>`:''}
+        ${o.review_record?`<div><b>复核记录</b>${esc(o.review_record.operator||'')} ·
+          ${esc(o.review_record.decision||'')} · ${esc(o.review_record.opinion||'')}</div>`:''}
+        ${o.rating?`<div><b>评价</b>${'★'.repeat(o.rating.score)}${'☆'.repeat(5-o.rating.score)}
+          ${esc(o.rating.comment||'')}（by ${esc(o.rating.rated_by||'')}）</div>`:''}
+        <div><b>创建时间</b>${fmtTime(o.created_at)}</div>
+      </div>
+      <div class="modal-actions"><button class="ghost" onclick="closeModal()">关闭</button></div>`);
+  } catch (e) { alert(e.message); }
+}
+async function adminCancel(id) {
+  const reason = prompt('取消原因（留痕）：', '管理员取消');
+  if (reason === null) return;
+  try { await api(`/api/v1/admin/orders/${id}/cancel`, 'POST', {reason}); toast('已取消'); renderOrders(); }
+  catch (e) { alert(e.message); }
+}
+
+/* ---------- 页面：官方任务 ---------- */
+async function renderOfficial() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const d = await api('/api/v1/admin/official-tasks');
+    const list = d.items.length ? `<div class="table-wrap" style="margin-top:20px"><table>
+      <thead><tr><th>编号</th><th>标题</th><th>类型</th><th>地点</th><th>时间</th><th>状态</th><th>发布时间</th></tr></thead><tbody>` +
+      d.items.map(o => `<tr><td class="td-sub">${esc(o.work_order_no)}</td><td>${esc(o.title)}</td>
+        <td>${esc(o.task_type)}</td><td>${esc(o.location)||'—'}</td><td>${esc(o.time_slot)||'—'}</td>
+        <td>${tagOf(o.status)}</td><td class="td-sub">${fmtTime(o.created_at)}</td></tr>`).join('') +
+      '</tbody></table></div>' : '<div class="empty" style="margin-top:20px">暂无官方任务</div>';
+    c.innerHTML = `
+      <div class="panel" style="max-width:560px"><h3>发布官方志愿任务（与个人工单统一入广场）</h3>
+        <label>标题</label><input id="ofTitle" placeholder="如：校运会会务志愿者">
+        <label>任务类型</label><select id="ofType">
+          <option>讲座会务</option><option>教室清扫</option><option>校园公益</option><option>其他</option></select>
+        <label>地点</label><input id="ofLoc" placeholder="如：田径场">
+        <label>时间</label><input id="ofTime" placeholder="如：周六 14:00-17:00">
+        <label>描述</label><textarea id="ofDesc" rows="3" placeholder="任务内容与要求"></textarea>
+        <div class="err" id="ofErr"></div>
+        <button onclick="createOfficial()" style="margin-top:14px">发布任务</button>
+      </div>
+      <h3 style="font-size:14.5px;margin:4px 0 0">已发布官方任务</h3>` + list;
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function createOfficial() {
+  try {
+    await api('/api/v1/admin/official-tasks', 'POST', {
+      title: document.getElementById('ofTitle').value.trim(),
+      task_type: document.getElementById('ofType').value,
+      location: document.getElementById('ofLoc').value.trim(),
+      time_slot: document.getElementById('ofTime').value.trim(),
+      description: document.getElementById('ofDesc').value.trim()});
+    toast('已发布官方任务');
+    renderOfficial();
+  } catch (e) { document.getElementById('ofErr').textContent = e.message; }
+}
+
+/* ---------- 页面：风险规则 ---------- */
+async function renderRiskRules() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const d = await api('/api/v1/admin/risk-rules');
+    c.innerHTML = `
+      <div class="toolbar"><span class="page-note">规则即配置（R11）：修改即时生效，操作全部留痕</span>
+        <button onclick="riskRuleForm()">＋ 新增规则</button></div>` +
+      (d.items.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>维度</th><th>条件表达式</th>
+      <th>等级</th><th>动作</th><th>官方指引</th><th>版本</th><th>修改人</th><th style="width:130px">操作</th></tr></thead><tbody>` +
+      d.items.map(r => `<tr>
+        <td class="td-sub">${r.id}</td><td>${esc(r.dimension)}</td><td><code>${esc(r.condition)}</code></td>
+        <td>${tagOf(r.level)}</td><td class="td-sub">${esc(r.action)}</td>
+        <td class="td-sub td-clip">${esc(r.official_channel_ref)||'—'}</td>
+        <td>v${r.version}</td><td class="td-sub">${esc(r.updated_by)}</td>
+        <td><button class="small ghost" onclick="riskRuleForm(${r.id},'${esc(r.condition).replace(/'/g,"\\'")}','${esc(r.level)}','${esc(r.action)}','${esc(r.official_channel_ref).replace(/'/g,"\\'")}')">编辑</button>
+            <button class="small ghost" onclick="delRiskRule(${r.id})">删除</button></td>
+      </tr>`).join('') + '</tbody></table></div>' : '<div class="empty">暂无规则，请新增</div>');
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function riskRuleForm(id, condition='', level='L2', action='warn_manual_review', channel='') {
+  openModal(`<h3>${id?'编辑':'新增'}风险规则</h3>
+    <div class="sub">条件为 Python 表达式，变量可用 task_type / urgency / scope</div>
+    <label>维度</label><select id="rrDim"><option>task_type</option><option>urgency</option><option>scope</option></select>
+    <label>条件表达式</label>
+    <input id="rrCond" value="${esc(condition)}" placeholder="如 task_type=='代办跑腿'">
+    <label>等级</label><select id="rrLevel">
+      <option ${level==='L1'?'selected':''}>L1</option><option ${level==='L2'?'selected':''}>L2</option>
+      <option ${level==='L3'?'selected':''}>L3</option></select>
+    <label>动作</label><select id="rrAction">
+      <option value="auto_publish" ${action==='auto_publish'?'selected':''}>auto_publish（自动发布）</option>
+      <option value="warn_manual_review" ${action==='warn_manual_review'?'selected':''}>warn_manual_review（人工复核）</option>
+      <option value="block_and_guide" ${action==='block_and_guide'?'selected':''}>block_and_guide（拦截并引导官方渠道）</option></select>
+    <label>官方渠道指引（L3 用）</label><input id="rrChan" value="${esc(channel)}" placeholder="校内后勤服务中心 / 校园保卫处">
+    <label>调整依据（留痕）</label><input id="rrReason" placeholder="为什么调整该规则">
+    <div class="err" id="rrErr"></div>
+    <div class="modal-actions"><button onclick="saveRiskRule(${id||0})">保存</button>
+      <button class="ghost" onclick="closeModal()">取消</button></div>`);
+  if (condition) document.getElementById('rrDim').value = 'task_type';
+}
+async function saveRiskRule(id) {
+  const body = {
+    dimension: document.getElementById('rrDim').value,
+    condition: document.getElementById('rrCond').value.trim(),
+    level: document.getElementById('rrLevel').value,
+    action: document.getElementById('rrAction').value,
+    official_channel_ref: document.getElementById('rrChan').value.trim(),
+    adjust_reason: document.getElementById('rrReason').value.trim()};
+  try { await api(id ? `/api/v1/admin/risk-rules/${id}` : '/api/v1/admin/risk-rules', id?'PUT':'POST', body);
+    closeModal(); toast('已保存'); renderRiskRules(); }
+  catch (e) { document.getElementById('rrErr').textContent = e.message; }
+}
+async function delRiskRule(id) {
+  if (!confirm('确认删除该规则？')) return;
+  try { await api(`/api/v1/admin/risk-rules/${id}`, 'DELETE'); toast('已删除'); renderRiskRules(); }
+  catch (e) { alert(e.message); }
+}
+
+/* ---------- 页面：积分规则 ---------- */
+async function renderCreditRules() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const d = await api('/api/v1/admin/credit-rules');
+    c.innerHTML = `
+      <div class="toolbar"><span class="page-note">事件积分规则（6.4）：发布/接单/完成/评价自动结算，P3 挂钩事件总线</span>
+        <button onclick="creditRuleForm()">＋ 新增规则</button></div>
+      <div class="table-wrap"><table><thead><tr><th>编码</th><th>事件</th><th>条件</th><th>分值</th><th>启用</th><th>版本</th><th style="width:130px">操作</th></tr></thead><tbody>` +
+      d.items.map(r => `<tr><td><code>${esc(r.rule_code)}</code></td><td>${esc(r.event)}</td><td>${esc(r.condition)}</td>
+        <td style="color:${r.delta>=0?'var(--l1)':'var(--l3)'};font-weight:600">${r.delta>0?'+':''}${r.delta}</td>
+        <td>${r.enabled?'<span class="tag published">启用</span>':'<span class="tag cancelled">停用</span>'}</td>
+        <td class="td-sub">v${r.version}</td>
+        <td><button class="small ghost" onclick="creditRuleForm(${r.id},'${esc(r.rule_code)}','${esc(r.event)}','${esc(r.condition)}',${r.delta},${r.enabled})">编辑</button>
+            <button class="small ghost" onclick="delCreditRule(${r.id})">删除</button></td></tr>`).join('') +
+      '</tbody></table></div>';
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function creditRuleForm(id, code='', event='publish', condition='守约', delta=1, enabled=true) {
+  openModal(`<h3>${id?'编辑':'新增'}积分规则</h3>
+    <label>规则编码</label><input id="crCode" value="${esc(code)}" placeholder="如 rate_reward" ${id?'disabled':''}>
+    <label>事件</label><select id="crEvent">
+      ${['publish','accept','complete','rate'].map(e=>`<option ${event===e?'selected':''}>${e}</option>`).join('')}</select>
+    <label>条件</label><input id="crCond" value="${esc(condition)}" placeholder="守约 / 失信 / 凭证核验通过">
+    <label>分值变动（正为加，负为扣）</label><input id="crDelta" type="number" value="${delta}">
+    <label><input type="checkbox" id="crEnabled" ${enabled?'checked':''} style="width:auto"> 启用该规则</label>
+    <div class="err" id="crErr"></div>
+    <div class="modal-actions"><button onclick="saveCreditRule(${id||0})">保存</button>
+      <button class="ghost" onclick="closeModal()">取消</button></div>`);
+}
+async function saveCreditRule(id) {
+  const body = {
+    rule_code: document.getElementById('crCode').value.trim(),
+    event: document.getElementById('crEvent').value,
+    condition: document.getElementById('crCond').value.trim(),
+    delta: parseInt(document.getElementById('crDelta').value||'0', 10),
+    enabled: document.getElementById('crEnabled').checked};
+  try { await api(id ? `/api/v1/admin/credit-rules/${id}` : '/api/v1/admin/credit-rules', id?'PUT':'POST', body);
+    closeModal(); toast('已保存'); renderCreditRules(); }
+  catch (e) { document.getElementById('crErr').textContent = e.message; }
+}
+async function delCreditRule(id) {
+  if (!confirm('确认删除该积分规则？')) return;
+  try { await api(`/api/v1/admin/credit-rules/${id}`, 'DELETE'); toast('已删除'); renderCreditRules(); }
+  catch (e) { alert(e.message); }
+}
+
+/* ---------- 页面：用户管理 ---------- */
+async function renderUsers() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const d = await api('/api/v1/admin/users?size=100');
+    c.innerHTML = `
+      <div class="toolbar"><span class="page-note">共 ${d.total} 个账号</span>
+        <button onclick="userForm()">＋ 新建账号</button></div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>用户名</th><th>姓名</th><th>角色</th>
+      <th>租户</th><th>信用分</th><th>状态</th><th style="width:110px">操作</th></tr></thead><tbody>` +
+      d.items.map(u => `<tr><td class="td-sub">${u.id}</td><td>${esc(u.username)}</td><td>${esc(u.real_name)||'—'}</td>
+        <td><span class="tag plain">${esc(u.role)}</span></td><td>${esc(u.tenant_id)}</td>
+        <td style="font-weight:600;color:${u.credit_score>=80?'var(--l1)':u.credit_score>=60?'var(--l2)':'var(--l3)'}">${u.credit_score}</td>
+        <td>${u.is_active?'<span class="tag published">正常</span>':'<span class="tag cancelled">禁用</span>'}</td>
+        <td><button class="small ghost" onclick="userForm(${u.id},'${esc(u.username)}','${esc(u.real_name)}','${esc(u.role)}','${esc(u.tenant_id)}',${u.is_active},${u.credit_score})">编辑</button></td></tr>`).join('') +
+      '</tbody></table></div>';
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function userForm(id, username='', realName='', role='student', tenant='default', active=true, credit=100) {
+  const isEdit = !!id;
+  openModal(`<h3>${isEdit?'编辑用户':'新建账号'}</h3>
+    ${isEdit?`<div class="sub">${esc(username)}</div>`:''}
+    ${isEdit?'':`<label>用户名</label><input id="ufUser" placeholder="登录名">
+    <label>初始密码</label><input id="ufPass" type="password" placeholder="至少 6 位">`}
+    <label>姓名</label><input id="ufName" value="${esc(realName)}" placeholder="真实姓名">
+    <label>角色</label><select id="ufRole">
+      <option ${role==='student'?'selected':''}>student</option>
+      <option ${role==='senior'?'selected':''}>senior</option>
+      <option ${role==='admin'?'selected':''}>admin</option></select>
+    <label>租户（学院/校区）</label><input id="ufTenant" value="${esc(tenant)}">
+    ${isEdit?`<label>信用分调整（正加负扣，写流水）</label><input id="ufCredit" type="number" placeholder="如 -5 或 +3，留空不改">
+    <label>调整依据</label><input id="ufReason" placeholder="调整原因（留痕）">
+    <label><input type="checkbox" id="ufActive" ${active?'checked':''} style="width:auto"> 账号启用</label>`:''}
+    <div class="err" id="ufErr"></div>
+    <div class="modal-actions"><button onclick="saveUser(${id||0})">保存</button>
+      <button class="ghost" onclick="closeModal()">取消</button></div>`);
+}
+async function saveUser(id) {
+  try {
+    if (!id) {
+      await api('/api/v1/admin/users', 'POST', {
+        username: document.getElementById('ufUser').value.trim(),
+        password: document.getElementById('ufPass').value,
+        real_name: document.getElementById('ufName').value.trim(),
+        role: document.getElementById('ufRole').value,
+        tenant_id: document.getElementById('ufTenant').value.trim() || 'default'});
+    } else {
+      const creditRaw = document.getElementById('ufCredit').value;
+      const body = {
+        real_name: document.getElementById('ufName').value.trim(),
+        role: document.getElementById('ufRole').value,
+        tenant_id: document.getElementById('ufTenant').value.trim() || 'default',
+        is_active: document.getElementById('ufActive').checked};
+      if (creditRaw !== '') { body.credit_delta = parseInt(creditRaw, 10); 
+        body.credit_reason = document.getElementById('ufReason').value.trim(); }
+      await api(`/api/v1/admin/users/${id}`, 'PUT', body);
+    }
+    closeModal(); toast('已保存'); renderUsers();
+  } catch (e) { document.getElementById('ufErr').textContent = e.message; }
+}
+
+/* ---------- 页面：审计日志 ---------- */
+async function renderAudit() {
+  const c = document.getElementById('pageContent');
+  c.innerHTML = '加载中…';
+  try {
+    const d = await api('/api/v1/admin/audit-logs?size=100');
+    if (!d.items.length) { c.innerHTML = '<div class="empty">暂无日志</div>'; return; }
+    const ACTION_LABEL = {l3_block:'L3拦截', manual_review:'人工复核', risk_rule_create:'新增风险规则',
+      risk_rule_update:'修改风险规则', risk_rule_delete:'删除风险规则', credit_rule_create:'新增积分规则',
+      credit_rule_update:'修改积分规则', credit_rule_delete:'删除积分规则', login:'登录', login_failed:'登录失败',
+      official_task_create:'发布官方任务', user_create:'新建用户', user_edit:'编辑用户',
+      admin_cancel:'管理员取消', order_transition:'状态迁移', pending_review:'进入待复核', credit_appeal:'积分申诉'};
+    c.innerHTML = `<div class="toolbar"><span class="page-note">共 ${d.total} 条 · 展示最近 100 条</span></div>
+      <div class="table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>对象</th><th>操作人</th><th>详情</th></tr></thead><tbody>` +
+      d.items.map(l => `<tr>
+        <td class="td-sub" style="white-space:nowrap">${fmtTime(l.created_at)}</td>
+        <td><span class="tag ${l.action==='l3_block'?'L3':l.action==='manual_review'?'L2':'plain'}">${esc(ACTION_LABEL[l.action]||l.action)}</span></td>
+        <td class="td-clip">${esc(l.target)}</td><td>${esc(l.operator)}</td>
+        <td class="td-clip td-sub" title="${esc(JSON.stringify(l.detail))}">${esc(JSON.stringify(l.detail))}</td>
+      </tr>`).join('') + '</tbody></table></div>';
+  } catch (e) { c.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ---------- 启动 ---------- */
+if (TOKEN && ME) { showMain(); } else { showLogin(); }
+</script>
+</body>
+</html>
