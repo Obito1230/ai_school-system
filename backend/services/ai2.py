@@ -40,7 +40,9 @@ def sanitize_input(text: str) -> tuple[str, bool]:
 
 
 def check_output(text: str) -> tuple[str, bool]:
-    """输出过滤：命中敏感主题则替换为兜底话术（内容安全兜底）。"""
+    """输出过滤：命中敏感主题则替换为兜底话术（内容安全兜底）。
+    仅用于过滤 LLM 生成的自由文本；知识库原文等平台可信内容不应经过本函数，
+    否则"禁止现金交易"这类安全条款会被误判为违规内容（自拦截）。"""
     if _SENSITIVE_PAT.search(text or ""):
         return ("抱歉，该话题涉及平台禁止内容。校园互助禁止现金交易、代考作弊等行为，"
                 "如有相关需求请使用官方渠道。"), True
@@ -81,6 +83,8 @@ def ask(body: AskIn, _: dict = Depends(get_current_user)):
     if answer is None:  # 无 Key / LLM 失败 → 纯检索兜底（R16 降级，服务永不 500）
         if hits:
             top = hits[0]
+            # 知识库原文是平台审核过的可信内容，不做敏感输出过滤
+            # （否则规则文档里"禁止现金交易"字样会触发自拦截，见 check_output 注释）
             answer = f"为你查到「{top['title']}」：{top['content']}"
         else:
             answer = "我暂时没有查到相关校园信息，建议到信息门户查询或咨询辅导员。"
