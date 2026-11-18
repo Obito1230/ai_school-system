@@ -43,6 +43,7 @@ cd D:\project_create\ai_school-system
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r backend\requirements.txt --no-cache-dir --trusted-host pypi.tuna.tsinghua.edu.cn -i https://pypi.tuna.tsinghua.edu.cn/simple
 # 启动
+$env:AIC_GLM_API_KEY = "在这里粘贴你的智谱Key"
 .\.venv\Scripts\python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
