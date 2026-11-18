@@ -354,12 +354,25 @@ function pgPublish(){
     <div class="seg">
       <button id="t-txt" class="on">📝 文字发布</button>
       <button id="t-vox">🎤 语音发布</button>
+      <button id="t-pic">📷 拍照报修</button>
     </div>
 
     <div id="pane-txt">
       <div class="card">
         <textarea id="txt" placeholder="例如：明天上午帮我从图书馆借三本书送到 6 号楼…"></textarea>
         <button class="btn block" style="margin-top:12px" id="btn-parse">🤖 智能解析</button>
+      </div>
+    </div>
+
+    <div id="pane-pic" style="display:none">
+      <div class="card" style="text-align:center">
+        <p class="muted small">拍下故障现场，AI 自动识别生成工单（识别结果可修改）</p>
+        <input type="file" id="pic-file" accept="image/*" capture="environment" style="display:none">
+        <button class="btn block ghost" id="btn-pic">📷 选择/拍摄照片</button>
+        <img id="pic-prev" style="display:none;max-width:100%;border-radius:8px;margin-top:10px">
+        <input id="pic-note" placeholder="补充说明（可空）：如 &quot;插座冒火星了&quot;" style="margin-top:10px">
+        <button class="btn block" id="btn-vision" style="margin-top:10px">🤖 AI 识别</button>
+        <p class="small muted" id="pic-state"></p>
       </div>
     </div>
 
@@ -387,8 +400,9 @@ function pgPublish(){
     <div id="tabbar">${tabbar()}</div>`;
 
   /* -- 发布方式切换 -- */
-  $('#t-txt').onclick = () => { $('#pane-txt').style.display='';  $('#pane-vox').style.display='none'; };
-  $('#t-vox').onclick = () => { $('#pane-txt').style.display='none'; $('#pane-vox').style.display=''; };
+  $('#t-txt').onclick = () => { $('#pane-txt').style.display='';  $('#pane-vox').style.display='none'; $('#pane-pic').style.display='none'; };
+  $('#t-vox').onclick = () => { $('#pane-txt').style.display='none'; $('#pane-vox').style.display='';   $('#pane-pic').style.display='none'; };
+  $('#t-pic').onclick = () => { $('#pane-txt').style.display='none'; $('#pane-vox').style.display='none'; $('#pane-pic').style.display=''; };
 
   /* -- 文字：智能解析 -- */
   $('#btn-parse').onclick = () => doParse({ text: $('#txt').value.trim() });
@@ -435,6 +449,82 @@ function pgPublish(){
       $('#rec-state').textContent = `识别结果：${d.transcript}（置信度 ${Math.round((d.confidence||0)*100)}%）`;
       await doParse({transcript: d.transcript, asr_confidence: d.confidence});
     }catch(err){ $('#rec-state').textContent = '就绪'; toast(err.message, true); }
+  }
+
+  /* -- 拍照报修：照片 → /ai/vision 识别 → 回显槽位（全部可改，R6） -- */
+  let PICB64 = '';
+  $('#btn-pic').onclick = () => $('#pic-file').click();
+  $('#pic-file').onchange = () => {
+    const f = $('#pic-file').files[0];
+    if (!f) return;
+    // 压缩到最长边 800px 再转 base64，控制上传体积（视觉模型按图计费）
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 800 / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * scale);
+      cv.height = Math.round(img.height * scale);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      PICB64 = cv.toDataURL('image/jpeg', 0.8).split(',')[1];
+      $('#pic-prev').src = cv.toDataURL('image/jpeg', 0.8);
+      $('#pic-prev').style.display = '';
+      $('#pic-state').textContent = `已选照片 ${cv.width}×${cv.height}，点击「AI 识别」`;
+    };
+    img.src = URL.createObjectURL(f);
+  };
+  $('#btn-vision').onclick = async () => {
+    if (!PICB64){ toast('请先选择照片', true); return; }
+    const btn = $('#btn-vision');
+    btn.disabled = true;
+    $('#pic-state').textContent = 'AI 识别中…';
+    try{
+      const d = await api('/ai/vision', {method:'POST',
+        body:{image_b64: PICB64, note: $('#pic-note').value.trim()}});
+      if (d.mode === 'degraded' && !d.description){
+        toast('视觉识别暂不可用，请改用文字/语音发布', true);
+        $('#pic-state').textContent = '就绪';
+        return;
+      }
+      // 识别结果直接进结构化表单（槽位全部可改，与文字解析同一套回显）
+      $('#parsed').style.display = '';
+      $('#parsed-tip').style.display = 'block';
+      $('#parsed-tip').textContent = d.mode === 'glm-4v'
+        ? `✅ AI 识别完成：${d.scene || '已识别场景'}（识别结果可修改）`
+        : '⚠️ 视觉服务降级，按附言解析（识别结果可修改）';
+      $('#f-type').value = d.task_type || '后勤服务';
+      $('#f-urg').value  = d.urgency  || '普通';
+      $('#f-loc').value  = $('#f-loc').value || '';
+      $('#f-time').value = $('#f-time').value || '';
+      $('#f-desc').value = d.description || '';
+      $('#parsed').scrollIntoView({behavior:'smooth'});
+      // 复用确认发布：/orders 提交（拍照场景直接创建）
+      $('#btn-submit').onclick = () => submitPhotoOrder();
+    }catch(err){ $('#pic-state').textContent = '就绪'; toast(err.message, true); }
+    finally{ btn.disabled = false; }
+  };
+  async function submitPhotoOrder(){
+    const body = {
+      text: $('#f-desc').value,           // 拍照识别结果走文本发布链路（再次过风控）
+      title: $('#f-desc').value.slice(0, 30),
+      task_type: $('#f-type').value,
+      urgency: $('#f-urg').value,
+      location: $('#f-loc').value.trim(),
+      time_slot: $('#f-time').value.trim(),
+      description: $('#f-desc').value.trim(),
+    };
+    try{
+      const d = await api('/orders', {method:'POST', body});
+      const o = d.order;
+      if (d.blocked || o.status === 'blocked'){   // 二次风控：识别文本若命中 L3 同样拦截
+        openModal(`
+          <h3 style="color:var(--danger)">⛔ 该需求已被拦截</h3>
+          <p class="muted" style="margin-bottom:8px">拦截原因：${esc(o.blocked_reason || '触发高风险规则')}</p>
+          <button class="btn block ghost" onclick="closeModal()">我知道了</button>`);
+        return;
+      }
+      toast('发布成功');
+      nav('me');
+    }catch(err){ toast(err.message, true); }
   }
 
   /* -- 解析：POST /orders 用返回工单回显结构化表单（全部可改） -- */

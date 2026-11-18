@@ -7,7 +7,7 @@ import json
 
 import httpx
 
-from ..config import GLM_API_KEY, GLM_BASE_URL, GLM_MODEL, GLM_TIMEOUT
+from ..config import GLM_API_KEY, GLM_BASE_URL, GLM_MODEL, GLM_TIMEOUT, GLM_VL_MODEL
 
 
 def glm_available() -> bool:
@@ -54,6 +54,50 @@ def glm_chat_json(prompt: str, system: str, temperature: float = 0.1) -> dict | 
         if t.lower().startswith("json"):
             t = t[4:]
     # 截取第一个 { 到最后一个 }
+    start, end = t.find("{"), t.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        return json.loads(t[start:end + 1])
+    except Exception:
+        return None
+
+
+def glm_vision_json(image_b64: str, prompt: str, system: str, temperature: float = 0.1) -> dict | None:
+    """视觉多模态调用（拍照报修）：image_b64 为不带 data: 前缀的纯 base64。
+    走 glm-4v-flash 免费视觉模型，输出约束为 JSON；失败一律返回 None 由调用方降级。
+    与文本链路同款容错：剥 ```json 围栏 + 宽容提取第一个 JSON 对象。"""
+    if not GLM_API_KEY:
+        return None
+    try:
+        r = httpx.post(
+            GLM_BASE_URL.rstrip("/") + "/chat/completions",
+            headers={"Authorization": "Bearer " + GLM_API_KEY},
+            json={
+                "model": GLM_VL_MODEL,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": [
+                        {"type": "image_url",
+                         "image_url": {"url": "data:image/jpeg;base64," + image_b64}},
+                        {"type": "text", "text": prompt},
+                    ]},
+                ],
+                "temperature": temperature,
+            },
+            timeout=GLM_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return None
+        text = r.json()["choices"][0]["message"]["content"]
+    except Exception:
+        return None
+    # 与 glm_chat_json 相同的宽容 JSON 提取
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.strip("`")
+        if t.lower().startswith("json"):
+            t = t[4:]
     start, end = t.find("{"), t.rfind("}")
     if start == -1 or end <= start:
         return None

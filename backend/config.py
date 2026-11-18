@@ -32,6 +32,8 @@ GLM_BASE_URL = os.environ.get("AIC_GLM_BASE_URL",
                               "https://open.bigmodel.cn/api/paas/v4/")  # 智谱 OpenAI 兼容端点
 GLM_MODEL = os.environ.get("AIC_GLM_MODEL", "glm-4-flash")     # Demo 默认免费模型，可换 glm-4-plus 等
 GLM_TIMEOUT = float(os.environ.get("AIC_GLM_TIMEOUT", "10"))   # 单次调用超时（秒），超时走降级
+# 视觉模型（多模态拍照报修）：识别故障照片生成工单描述，免费档 glm-4v-flash
+GLM_VL_MODEL = os.environ.get("AIC_GLM_VL_MODEL", "glm-4v-flash")
 
 # ASR 真实语音识别（T2.2）：智谱 GLM 目前主推文本/视觉模型，语音识别
 # 需要单独的 ASR 服务（讯飞/阿里/腾讯）。未配置时 /ai/asr 保持 Demo 模拟。
