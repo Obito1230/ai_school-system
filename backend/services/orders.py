@@ -234,6 +234,33 @@ def confirm_order(order_id: int, body: ConfirmIn, payload: dict = Depends(get_cu
         if v is not None:
             setattr(o, k, v)
     o.status = OrderStatus.AI_REVIEWING.value  # 修改后回 AI 重审
+    # ---- 重审：修改槽位可能改变风险等级（如把特急改成普通），必须重新分级分流 ----
+    from ..rules import rule_based_risk
+    from ..models import RiskRule, AuditLog as _AL
+    rule_rows = db.scalars(select(RiskRule)).all()
+    rules = [dict(id=x.id, condition=x.condition, level=x.level, action=x.action) for x in rule_rows]
+    level, risk_conf = rule_based_risk(o.task_type, o.urgency, "校内", rules)
+    o.risk_level = level
+    o.risk_confidence = risk_conf
+    if level == RiskLevel.L3.value:
+        # 改后命中 L3：拦截并引导官方渠道（与 create_order 一致）
+        o.blocked_reason = f"修改信息后重审命中高风险规则(等级{level})，强制拦截并引导官方渠道"
+        o.blocked_at = datetime.now()
+        o.blocked_by = "reconfirm_engine"
+        o.official_channel_ref = next((r.get("official_channel_ref") for r in rules if r.get("official_channel_ref")), "") \
+            or "校内后勤服务中心 / 校园保卫处"
+        _transition(db, o, OrderStatus.BLOCKED.value)
+        db.add(_AL(action="l3_block", target=o.work_order_no,
+                   detail={"level": level, "reason": o.blocked_reason}, operator="reconfirm_engine"))
+        db.commit()
+        return _order_dto(o)
+    if level == RiskLevel.L2.value or risk_conf < 0.6:
+        o.status = OrderStatus.PENDING_MANUAL_REVIEW.value
+        db.add(_AL(action="pending_review", target=o.work_order_no,
+                   detail={"level": level, "risk_confidence": risk_conf, "stage": "reconfirm"},
+                   operator="reconfirm_engine"))
+    else:
+        _transition(db, o, OrderStatus.PUBLISHED.value)
     db.commit()
     return _order_dto(o)
 

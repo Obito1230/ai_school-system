@@ -58,18 +58,71 @@ _ASK_SYSTEM = (
     "并建议用户咨询相关部门，不要编造。回答不超过 150 字，用适合学生的友好语气。"
 )
 
+_ASK_TOOL_SYSTEM = (
+    "你是校园互助平台的智能助手「小互助」。已根据用户问题执行了平台工具查询（下方 tool_result 是真实数据）。"
+    "请直接用一句自然中文回答用户问题，数字从 tool_result 中准确引用，不要编造，不要写代码，"
+    "不要输出 JSON 格式说明，只输出答案本身。回答不超过 100 字，语气友好。"
+)
+
 
 class AskIn(BaseModel):
     question: str
 
 
+def _try_tools(question: str, db: Session) -> dict | None:
+    """问数据类问题先走 Function Calling：LLM 决策选工具 → 白名单执行。
+    命中工具返回 {tool, result}；未命中/无 Key/LLM 失败返回 None（继续走纯 RAG）。
+    注意：search_kb 交给知识库 RAG 链路处理（此处不执行，避免双通道）；
+    get_credit 查不到用户（credit_score=None）也返回 None 交给 RAG 兜底。"""
+    decision = None
+    if _glm_ok():
+        decision = _glm_chat_json(question, _TOOL_SYSTEM)
+    if not (decision and decision.get("tool")):
+        return None
+    tool = decision["tool"]
+    if tool not in {t["name"] for t in TOOLS} or tool == "search_kb":  # 幻觉/KB → 不执行
+        return None
+    out = _exec_tool(db, tool, decision.get("arguments") or {})
+    r = out.get("result")
+    if r is None or (isinstance(r, dict) and r.get("credit_score") is None and r.get("username") is None):
+        return None   # 查无数据（如用户名不存在）→ RAG 兜底
+    return out
+
+
 @router.post("/api/v1/ai/ask", tags=["AI算法服务"])
-def ask(body: AskIn, _: dict = Depends(get_current_user)):
+def ask(body: AskIn, payload: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """RAG 问答：检索增强生成（RAG 技术应用）。
-    链路：输入清洗 → KB Top-3 召回 → GLM 增强生成 → 输出安全过滤 → 无 Key 降级为纯检索摘要。"""
+    链路：输入清洗 → Function Calling 工具判定（查信用/查工单）→ KB Top-3 召回 →
+    GLM 增强生成 → 输出安全过滤 → 无 Key 降级为纯检索摘要。"""
     question, injected = sanitize_input(body.question)
     if not question:
         return {"answer": "请输入你的问题～", "sources": [], "injected": injected, "mode": "guard"}
+    if injected:
+        return {"answer": "检测到疑似提示词注入，该请求已被安全策略拦截。",
+                "sources": [], "injected": True, "mode": "guard"}
+
+    # 1. 工具优先：问数据（信用分/工单）先查库，工具结果交给 GLM 组织语言
+    tool_out = _try_tools(question, db)
+    if tool_out and tool_out.get("result") is not None:
+        raw = _glm_chat_json(
+            json.dumps({"question": question, "tool_result": tool_out}, ensure_ascii=False),
+            _ASK_TOOL_SYSTEM + '\n输出 JSON：{"answer":"..."}')
+        if raw and raw.get("answer"):
+            ans = str(raw["answer"])
+        else:
+            # GLM 失败/输错格式 → 不用 LLM，直接把工具结果拼成自然语句
+            r = tool_out["result"]
+            if isinstance(r, dict):
+                if tool_out.get("tool") == "get_credit":
+                    ans = f"{r.get('username')} 的当前信用分为 {r.get('credit_score')} 分。"
+                else:
+                    ans = json.dumps(r, ensure_ascii=False)
+            else:
+                ans = json.dumps(r, ensure_ascii=False)
+        return {"answer": ans, "mode": "tool_llm", "tool": tool_out.get("tool"),
+                "sources": [], "injected": False, "sensitive_blocked": False}
+
+    # 2. 纯 RAG：知识库问答
     hits = kb.recall(question, k=3)
     ctx = "\n".join(f"[{h['id']}] {h['title']}：{h['content']}" for h in hits) or "（无）"
     mode, answer, blocked = "rag_llm", None, False
@@ -104,24 +157,47 @@ def _sse(event: str, data: dict) -> str:
 
 
 @router.post("/api/v1/ai/ask/stream", tags=["AI算法服务"])
-def ask_stream(body: AskIn, _: dict = Depends(get_current_user)):
+def ask_stream(body: AskIn, payload: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """RAG 流式问答（text/event-stream）。
     事件序列：sources（检索到的资料）→ delta（逐段答案）→ done（收尾元数据）。
     Demo 无真实流式 LLM 端点，故生成后按标点切片模拟逐段推送——前端消费方式与真流式完全一致，
     换 streaming LLM 时只需替换 delta 生成源，接口协议不变。"""
     question, injected = sanitize_input(body.question)
+    # 流式同样工具优先（与 ask 一致）：查信用/查工单先查库再组织语言
+    tool_out = None
+    if question and not injected:
+        tool_out = _try_tools(question, db)
     hits = kb.recall(question, k=3) if question else []
+    if tool_out and tool_out.get("result") is not None:
+        hits = []   # 工具命中时不做知识库召回，来源展示为工具名
 
     def gen():
-        yield _sse("sources", {"items": [{"id": h["id"], "title": h["title"]} for h in hits]})
-        if not question:
+        if tool_out and tool_out.get("result") is not None:
+            yield _sse("sources", {"items": [{"id": "tool", "title": "🔧 " + str(tool_out.get("tool", ""))}]})
+            raw = _glm_chat_json(
+                json.dumps({"question": question, "tool_result": tool_out}, ensure_ascii=False),
+                _ASK_TOOL_SYSTEM + '\n输出 JSON：{"answer":"..."}')
+            if raw and raw.get("answer"):
+                answer = str(raw["answer"])
+            else:
+                r = tool_out["result"]
+                answer = (f"{r.get('username')} 的当前信用分为 {r.get('credit_score')} 分。"
+                          if isinstance(r, dict) and tool_out.get("tool") == "get_credit"
+                          else json.dumps(r, ensure_ascii=False))
+        elif not question:
+            yield _sse("sources", {"items": []})
             yield _sse("delta", {"text": "请输入你的问题～"})
+            answer = None
         elif injected:
+            yield _sse("sources", {"items": []})
             yield _sse("delta", {"text": "检测到疑似提示词注入，该请求已被安全策略拦截。"})
+            answer = None
         else:
+            yield _sse("sources", {"items": [{"id": h["id"], "title": h["title"]} for h in hits]})
             # 复用 ask 的生成/兜底逻辑拿完整答案，再切片推送
             full = _rag_answer(question, hits)
             answer, blocked = check_output(full) if _glm_ok() else (full, False)
+        if answer:
             for piece in re.split(r"(?<=[。！？；\n])", answer):  # 按句切
                 if piece:
                     yield _sse("delta", {"text": piece})

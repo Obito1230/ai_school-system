@@ -3,6 +3,24 @@
 启动：python -m uvicorn backend.main:app --port 8000（在项目根目录执行）"""
 from pathlib import Path
 
+# ---- .env 加载（最早执行）：项目根 .env 的 KEY=VALUE 注入环境变量 ----
+# 密钥只放本地 .env（.gitignore 已排除），优先级低于已设置的系统环境变量
+def _load_dotenv() -> None:
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        k, v = k.strip(), v.strip()
+        if k and k not in os.environ:      # 已有系统环境变量时不覆盖
+            os.environ[k] = v
+
+import os
+_load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
