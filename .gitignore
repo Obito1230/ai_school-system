@@ -30,3 +30,7 @@ Thumbs.db
 docs/
 *.bat
 scripts/
+
+# 参赛申请书等大文件不入仓库
+*.docx
+AI赋能的校园互助服务平台.docx
