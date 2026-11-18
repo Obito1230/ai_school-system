@@ -92,6 +92,8 @@ textarea{min-height:140px;resize:vertical}
 }
 .menu .ico{font-size:80px;line-height:1}   /* 大图标 */
 .menu .b1{background:#eaf2fc;border-color:var(--primary)}
+.menu .b2{background:#f3f7ee;border-color:#4a7c2f}
+.menu .b3{background:#fdf6e8;border-color:#b45309}
 .menu .b2{background:#eef8ef;border-color:var(--ok)}
 
 /* ---------- 语音按钮 ---------- */
@@ -185,7 +187,7 @@ textarea{min-height:140px;resize:vertical}
 /* ============================================================
    适老化端 SPA（hash 路由，无刷新切页）
    页面：#/login 登录 · #/home 首页 · #/ask 求助 · #/mine 我的工单
-        #/order/:id 工单详情
+        #/credit 我的信用 · #/order/:id 工单详情
    接口约定与学生端一致（Bearer token，前缀 /api/v1）
    ============================================================ */
 const API = '/api/v1';
@@ -270,6 +272,7 @@ function route(){
   if (h === '#/home')  return pgHome();
   if (h === '#/ask')   return pgAsk();
   if (h === '#/mine')  return pgMine();
+  if (h === '#/credit') return pgCredit();
   location.hash = '#/home';
 }
 
@@ -327,10 +330,14 @@ function pgHome(){
       <button class="b2" id="m-mine">
         <span class="ico">📋</span>我的工单<br><span style="font-size:28px;font-weight:400">看看进展</span>
       </button>
+      <button class="b3" id="m-credit">
+        <span class="ico">⭐</span>我的信用<br><span style="font-size:28px;font-weight:400">互助得星星</span>
+      </button>
     </div>
     <p class="hint center" style="margin-top:34px">遇到紧急情况请直接拨打校内服务电话</p>`;
   $('#m-ask').onclick  = () => location.hash = '#/ask';
   $('#m-mine').onclick = () => location.hash = '#/mine';
+  $('#m-credit').onclick = () => location.hash = '#/credit';
 }
 
 /* ============================================================
@@ -534,6 +541,38 @@ function typeTag(o){
     return `<span class="badge b-official">官方</span>`;
   const lv = o.risk_level === 'L3' ? 'b-L3' : o.risk_level === 'L2' ? 'b-L2' : 'b-L1';
   return `<span class="badge ${lv}">${esc(o.risk_level || 'L1')}</span>`;
+}
+
+/* ============================================================
+   页面 4.5：我的信用（大字显示分数 + 流水大卡片；老人只读，不做申诉）
+   ============================================================ */
+const EVT_TXT = {publish:'发布求助', accept:'接单互助', complete:'完成互助',
+  rate:'获得评价', breach:'违约', adjust:'人工调整'};
+async function pgCredit(){
+  view.innerHTML = '<div class="card center" style="margin-top:30px;font-size:32px">加载中…</div>';
+  const me = JSON.parse(localStorage.getItem('user') || '{}');
+  let score, led;
+  try{
+    const c = await api('/credits/' + me.id);
+    score = c.credit_score;
+    led = await api(`/credits/${me.id}/ledger?size=20`);
+  }catch(e){ view.innerHTML = `<div class="card center"><p style="font-size:32px">${esc(e.message)}</p></div>`; return; }
+  view.innerHTML = `
+    <div class="card center">
+      <div style="font-size:30px;color:var(--ink2)">我的信用分</div>
+      <div style="font-size:96px;font-weight:800;color:${score >= 100 ? 'var(--ok)' : score >= 80 ? '#b45309' : 'var(--danger)'}">${esc(score ?? '-')}</div>
+      <p class="hint" style="font-size:28px">${score >= 100 ? '信用很好，互助优先安排 🌟' : score >= 80 ? '信用良好，继续保持' : '信用偏低，完成互助可加分'}</p>
+    </div>
+    <h2 style="font-size:36px;margin:6px 0 14px">得分记录</h2>
+    ${(led.items || []).length ? led.items.map(it => `
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:22px 26px;margin-bottom:18px">
+        <div style="text-align:left">
+          <div style="font-size:30px;font-weight:700">${esc(EVT_TXT[it.event] || it.event)}</div>
+          <div class="hint" style="font-size:24px">${esc((it.created_at || '').replace('T', ' ').slice(0, 16))}${it.remark ? ' · ' + esc(it.remark) : ''}</div>
+        </div>
+        <div style="font-size:44px;font-weight:800;color:${it.delta >= 0 ? 'var(--ok)' : 'var(--danger)'}">${it.delta >= 0 ? '+' : ''}${esc(it.delta)}</div>
+      </div>`).join('')
+    : `<div class="card center"><p style="font-size:30px">还没有记录，完成一次互助就能得分</p></div>`}`;
 }
 
 /* ============================================================
