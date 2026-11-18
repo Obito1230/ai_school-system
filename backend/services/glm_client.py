@@ -43,7 +43,9 @@ def glm_chat(prompt: str, system: str, temperature: float = 0.1) -> str | None:
 
 def glm_chat_json(prompt: str, system: str, temperature: float = 0.1) -> dict | None:
     """glm_chat + JSON 提取：模型可能裹 ```json 代码栏或夹带说明文字，
-    这里宽容解析出第一个 JSON 对象；解析失败返回 None。"""
+    这里宽容解析出第一个 JSON 对象；解析失败返回 None。
+    兜底：模型偶尔无视「输出 JSON」要求直接给自然语句（如「stu01的信用分是102分。」），
+    此时把整句包成 {"answer": <原句>} 返回，调用方按 answer 字段消费不至于整链路降级。"""
     text = glm_chat(prompt, system, temperature)
     if text is None:
         return None
@@ -55,12 +57,17 @@ def glm_chat_json(prompt: str, system: str, temperature: float = 0.1) -> dict | 
             t = t[4:]
     # 截取第一个 { 到最后一个 }
     start, end = t.find("{"), t.rfind("}")
-    if start == -1 or end <= start:
-        return None
-    try:
-        return json.loads(t[start:end + 1])
-    except Exception:
-        return None
+    if start != -1 and end > start:
+        try:
+            return json.loads(t[start:end + 1])
+        except Exception:
+            pass
+    # 无 JSON 对象：裸文本兜底（strip 掉围栏残留），仅当文本短（像一句回答）时采用，
+    # 避免把长篇说明文字误当答案
+    t = t.strip()
+    if t and len(t) <= 200 and "{" not in t:
+        return {"answer": t}
+    return None
 
 
 def glm_vision_json(image_b64: str, prompt: str, system: str, temperature: float = 0.1) -> dict | None:

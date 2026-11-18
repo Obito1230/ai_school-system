@@ -45,6 +45,15 @@ for r in (users.router, orders.router, ai.router, ai2.router, credits.router, ad
     app.include_router(r)
 
 
+@app.get("/api/health/env-check", tags=["系统"])
+def env_check():
+    """临时诊断：服务进程内 .env / GLM 配置是否加载成功（不返回 Key 本体）。"""
+    from . import config as _cfg
+    return {"key_len": len(_cfg.GLM_API_KEY), "model": _cfg.GLM_MODEL,
+            "base_url": _cfg.GLM_BASE_URL, "timeout": _cfg.GLM_TIMEOUT,
+            "env_var_set": bool(os.environ.get("AIC_GLM_API_KEY"))}
+
+
 @app.get("/api/health", tags=["系统"])
 def health():
     return {"status": "ok", "service": "ai-campus-mutual-aid", "version": app.version}
