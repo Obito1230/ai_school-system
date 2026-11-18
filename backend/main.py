@@ -12,7 +12,7 @@ from .config import BASE_DIR, ADMIN_DEFAULT_PASSWORD, ADMIN_DEFAULT_USER
 from .database import Base, SessionLocal, engine
 from .models import CreditRule, RiskRule, User
 from .security import hash_password
-from .services import ai, admin, credits, orders, users
+from .services import ai, ai2, admin, credits, orders, users
 
 app = FastAPI(
     title="AI赋能的校园互助服务平台 · 管理端框架（Demo）",
@@ -23,7 +23,7 @@ app = FastAPI(
 # CORS：本地联调放开（生产收敛）
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-for r in (users.router, orders.router, ai.router, credits.router, admin.router):
+for r in (users.router, orders.router, ai.router, ai2.router, credits.router, admin.router):
     app.include_router(r)
 
 
