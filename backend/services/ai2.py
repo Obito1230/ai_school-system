@@ -7,8 +7,10 @@
 """
 import json
 import re
+import time
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -86,6 +88,57 @@ def ask(body: AskIn, _: dict = Depends(get_current_user)):
     return {"answer": answer, "mode": mode,
             "sources": [{"id": h["id"], "title": h["title"], "score": h["score"]} for h in hits],
             "injected": injected, "sensitive_blocked": blocked}
+
+
+# ============================================================
+# 1b. RAG 问答 · 流式版（SSE）：AI 交互体验（思考状态可视化 + 逐字输出）
+# ============================================================
+
+def _sse(event: str, data: dict) -> str:
+    """SSE 帧：event: <name>\\ndata: <json>\\n\\n"""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/api/v1/ai/ask/stream", tags=["AI算法服务"])
+def ask_stream(body: AskIn, _: dict = Depends(get_current_user)):
+    """RAG 流式问答（text/event-stream）。
+    事件序列：sources（检索到的资料）→ delta（逐段答案）→ done（收尾元数据）。
+    Demo 无真实流式 LLM 端点，故生成后按标点切片模拟逐段推送——前端消费方式与真流式完全一致，
+    换 streaming LLM 时只需替换 delta 生成源，接口协议不变。"""
+    question, injected = sanitize_input(body.question)
+    hits = kb.recall(question, k=3) if question else []
+
+    def gen():
+        yield _sse("sources", {"items": [{"id": h["id"], "title": h["title"]} for h in hits]})
+        if not question:
+            yield _sse("delta", {"text": "请输入你的问题～"})
+        elif injected:
+            yield _sse("delta", {"text": "检测到疑似提示词注入，该请求已被安全策略拦截。"})
+        else:
+            # 复用 ask 的生成/兜底逻辑拿完整答案，再切片推送
+            full = _rag_answer(question, hits)
+            answer, blocked = check_output(full) if _glm_ok() else (full, False)
+            for piece in re.split(r"(?<=[。！？；\n])", answer):  # 按句切
+                if piece:
+                    yield _sse("delta", {"text": piece})
+                    time.sleep(0.12)  # 模拟 token 间隔（真实接入时删除）
+        yield _sse("done", {"mode": "stream", "count": len(hits)})
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _rag_answer(question: str, hits: list[dict]) -> str:
+    """非流式 RAG 答案生成（流式/非流式共用）：GLM 优先，失败纯检索兜底。"""
+    if _glm_ok():
+        ctx = json.dumps({"question": question, "references": [
+            {"id": h["id"], "title": h["title"], "content": h["content"]} for h in hits]}, ensure_ascii=False)
+        raw = _glm_chat_json(ctx, _ASK_SYSTEM + "\n输出 JSON：{\"answer\":\"...\"}")
+        if raw and raw.get("answer"):
+            return str(raw["answer"])
+    if hits:
+        return f"为你查到「{hits[0]['title']}」：{hits[0]['content']}"
+    return "我暂时没有查到相关校园信息，建议到信息门户查询或咨询辅导员。"
 
 # ============================================================
 # 2. Function Calling 工具注册表与执行器
